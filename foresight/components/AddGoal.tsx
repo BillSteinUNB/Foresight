@@ -1,23 +1,21 @@
-import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { X, Check, Target, AlertCircle } from 'lucide-react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { View, Text, TextInput, TouchableOpacity, Modal, StyleSheet, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
+import { MotiView, AnimatePresence } from 'moti';
+import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
+
 import { SavingsGoal } from '../types';
-import { formatCurrency } from '../utils';
+import { isValidAmount } from '../utils';
+import { colors, spacing, borderRadius, typography, commonStyles } from '../theme';
+
+const GOAL_ICONS = ['🏖️', '🚗', '🏠', '💍', '📱', '🎓', '💼', '🎮', '✈️', '👶', '🏋️', '🎸'];
+const GOAL_COLORS = ['#00D9A5', '#4ECDC4', '#3498DB', '#9B59B6', '#E74C3C', '#F39C12', '#FF6B35', '#FF69B4'];
 
 interface Props {
   isOpen: boolean;
   onClose: () => void;
   onAdd: (goal: Omit<SavingsGoal, 'id'>) => void;
 }
-
-interface ValidationErrors {
-  name?: string;
-  targetAmount?: string;
-  currentAmount?: string;
-}
-
-const GOAL_ICONS = ['🏖️', '🚗', '🏠', '💍', '📱', '🎓', '💼', '🎮', '✈️', '👶', '🏋️', '🎸'];
-const GOAL_COLORS = ['#00D9A5', '#4ECDC4', '#3498DB', '#9B59B6', '#E74C3C', '#F39C12', '#FF6B35', '#FF69B4'];
 
 const AddGoal: React.FC<Props> = ({ isOpen, onClose, onAdd }) => {
   const [name, setName] = useState('');
@@ -26,7 +24,7 @@ const AddGoal: React.FC<Props> = ({ isOpen, onClose, onAdd }) => {
   const [selectedIcon, setSelectedIcon] = useState('🎯');
   const [selectedColor, setSelectedColor] = useState(GOAL_COLORS[0]);
   const [step, setStep] = useState<1 | 2>(1);
-  const [errors, setErrors] = useState<ValidationErrors>({});
+  const nameInputRef = useRef<TextInput>(null);
 
   useEffect(() => {
     if (isOpen) {
@@ -36,326 +34,463 @@ const AddGoal: React.FC<Props> = ({ isOpen, onClose, onAdd }) => {
       setSelectedIcon('🎯');
       setSelectedColor(GOAL_COLORS[0]);
       setStep(1);
-      setErrors({});
+      setTimeout(() => nameInputRef.current?.focus(), 300);
     }
   }, [isOpen]);
 
-  const validateStep1 = (): boolean => {
-    const newErrors: ValidationErrors = {};
-    
-    if (!name.trim()) {
-      newErrors.name = 'Please enter a goal name';
-    } else if (name.trim().length < 2) {
-      newErrors.name = 'Goal name must be at least 2 characters';
-    }
-    
-    const target = parseFloat(targetAmount);
-    if (!targetAmount || isNaN(target)) {
-      newErrors.targetAmount = 'Please enter a valid target amount';
-    } else if (target <= 0) {
-      newErrors.targetAmount = 'Target amount must be greater than 0';
-    } else if (target > 10000000) {
-      newErrors.targetAmount = 'Target amount is too large (max $10M)';
-    }
-    
-    const current = parseFloat(currentAmount);
-    if (currentAmount && !isNaN(current)) {
-      if (current < 0) {
-        newErrors.currentAmount = 'Starting amount cannot be negative';
-      } else if (current > target) {
-        newErrors.currentAmount = 'Starting amount cannot exceed target amount';
-      }
-    }
-    
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
-
-  const handleNext = () => {
-    if (validateStep1()) {
+  const handleNext = useCallback(() => {
+    if (name.trim() && parseFloat(targetAmount) > 0) {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       setStep(2);
     }
-  };
+  }, [name, targetAmount]);
 
-  const handleSubmit = () => {
-    // Re-validate step 1 before submitting
-    if (!validateStep1()) {
-      setStep(1);
-      return;
-    }
-
+  const handleSubmit = useCallback(() => {
     const target = parseFloat(targetAmount);
     const current = parseFloat(currentAmount) || 0;
 
-    onAdd({
-      name: name.trim(),
-      targetAmount: target,
-      currentAmount: current,
-      icon: selectedIcon,
-      color: selectedColor
-    });
-    onClose();
-  };
+    if (name.trim() && isValidAmount(target)) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      onAdd({
+        name: name.trim(),
+        targetAmount: target,
+        currentAmount: current,
+        icon: selectedIcon,
+        color: selectedColor,
+      });
+      onClose();
+    }
+  }, [name, targetAmount, currentAmount, selectedIcon, selectedColor, onAdd, onClose]);
 
-  const isStep1Valid = name.trim().length >= 2 && parseFloat(targetAmount) > 0;
-
-  if (!isOpen) return null;
+  const isStep1Valid = name.trim() && parseFloat(targetAmount) > 0;
 
   return (
-    <AnimatePresence>
-      <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center pointer-events-none">
-        {/* Backdrop */}
-        <motion.div 
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          className="absolute inset-0 bg-black/80 backdrop-blur-sm pointer-events-auto"
-          onClick={onClose}
-        />
+    <Modal
+      visible={isOpen}
+      transparent
+      animationType="slide"
+      onRequestClose={onClose}
+    >
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.overlay}
+      >
+        <TouchableOpacity style={styles.backdrop} onPress={onClose} activeOpacity={1} />
 
-        {/* Modal */}
-        <motion.div
-          initial={{ y: '100%' }}
-          animate={{ y: 0 }}
-          exit={{ y: '100%' }}
-          transition={{ type: "spring", damping: 25, stiffness: 200 }}
-          className="w-full max-w-md bg-surface-200 rounded-t-3xl sm:rounded-2xl p-6 pointer-events-auto shadow-2xl border-t border-surface-300"
+        <MotiView
+          from={{ translateY: 300 }}
+          animate={{ translateY: 0 }}
+          exit={{ translateY: 300 }}
+          transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+          style={styles.sheet}
         >
           {/* Header */}
-          <div className="flex justify-between items-center mb-6">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-mint/10 rounded-xl">
-                <Target className="text-mint" size={20} />
-              </div>
-              <h2 className="text-xl font-semibold text-white">New Savings Goal</h2>
-            </div>
-            <button onClick={onClose} className="p-2 bg-surface-300 rounded-full hover:bg-surface-400">
-              <X size={20} className="text-neutral-400" />
-            </button>
-          </div>
+          <View style={styles.header}>
+            <View style={commonStyles.row}>
+              <View style={styles.headerIcon}>
+                <Ionicons name="flag" size={20} color={colors.mint} />
+              </View>
+              <Text style={styles.title}>New Savings Goal</Text>
+            </View>
+            <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
+              <Ionicons name="close" size={20} color={colors.neutral400} />
+            </TouchableOpacity>
+          </View>
 
-          {/* Progress Indicators */}
-          <div className="flex gap-2 mb-6">
-            <div className={`h-1 flex-1 rounded-full ${step >= 1 ? 'bg-mint' : 'bg-surface-400'}`} />
-            <div className={`h-1 flex-1 rounded-full ${step >= 2 ? 'bg-mint' : 'bg-surface-400'}`} />
-          </div>
+          {/* Progress */}
+          <View style={styles.progressBar}>
+            <View style={[styles.progressStep, step >= 1 && styles.progressStepActive]} />
+            <View style={[styles.progressStep, step >= 2 && styles.progressStepActive]} />
+          </View>
 
-          <AnimatePresence mode="wait">
-            {step === 1 ? (
-              <motion.div
-                key="step1"
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -20 }}
-                className="space-y-5"
-              >
-                {/* Goal Name */}
-                <div>
-                  <label className="text-xs font-bold text-neutral-500 uppercase tracking-wider block mb-2">
-                    Goal Name
-                  </label>
-                  <input
-                    type="text"
-                    value={name}
-                    onChange={(e) => {
-                      setName(e.target.value);
-                      if (errors.name) setErrors({ ...errors, name: undefined });
-                    }}
-                    placeholder="e.g., Dream Vacation"
-                    className={`w-full bg-surface-100 border rounded-xl p-4 text-white placeholder:text-neutral-600 focus:outline-none font-medium ${
-                      errors.name ? 'border-danger focus:border-danger' : 'border-surface-300 focus:border-mint'
-                    }`}
-                    autoFocus
-                    maxLength={50}
-                  />
-                  {errors.name && (
-                    <motion.div
-                      initial={{ opacity: 0, y: -5 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className="flex items-center gap-2 mt-2 text-danger text-sm"
-                    >
-                      <AlertCircle size={14} />
-                      <span>{errors.name}</span>
-                    </motion.div>
-                  )}
-                </div>
-
-                {/* Target Amount */}
-                <div>
-                  <label className="text-xs font-bold text-neutral-500 uppercase tracking-wider block mb-2">
-                    Target Amount
-                  </label>
-                  <div className="relative">
-                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-400 font-mono">$</span>
-                    <input
-                      type="number"
-                      value={targetAmount}
-                      onChange={(e) => {
-                        const value = e.target.value;
-                        // Allow empty, numbers, and one decimal point
-                        if (value === '' || /^\d*\.?\d*$/.test(value)) {
-                          setTargetAmount(value);
-                          if (errors.targetAmount) setErrors({ ...errors, targetAmount: undefined });
-                        }
-                      }}
-                      placeholder="5,000"
-                      min="0.01"
-                      step="0.01"
-                      className={`w-full bg-surface-100 border rounded-xl p-4 pl-8 text-white placeholder:text-neutral-600 focus:outline-none font-mono ${
-                        errors.targetAmount ? 'border-danger focus:border-danger' : 'border-surface-300 focus:border-mint'
-                      }`}
-                    />
-                  </div>
-                  {errors.targetAmount && (
-                    <motion.div
-                      initial={{ opacity: 0, y: -5 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className="flex items-center gap-2 mt-2 text-danger text-sm"
-                    >
-                      <AlertCircle size={14} />
-                      <span>{errors.targetAmount}</span>
-                    </motion.div>
-                  )}
-                </div>
-
-                {/* Starting Amount (Optional) */}
-                <div>
-                  <label className="text-xs font-bold text-neutral-500 uppercase tracking-wider block mb-2">
-                    Starting Amount <span className="text-neutral-600">(Optional)</span>
-                  </label>
-                  <div className="relative">
-                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-400 font-mono">$</span>
-                    <input
-                      type="number"
-                      value={currentAmount}
-                      onChange={(e) => {
-                        const value = e.target.value;
-                        if (value === '' || /^\d*\.?\d*$/.test(value)) {
-                          setCurrentAmount(value);
-                          if (errors.currentAmount) setErrors({ ...errors, currentAmount: undefined });
-                        }
-                      }}
-                      placeholder="0"
-                      min="0"
-                      step="0.01"
-                      className={`w-full bg-surface-100 border rounded-xl p-4 pl-8 text-white placeholder:text-neutral-600 focus:outline-none font-mono ${
-                        errors.currentAmount ? 'border-danger focus:border-danger' : 'border-surface-300 focus:border-mint'
-                      }`}
-                    />
-                  </div>
-                  {errors.currentAmount && (
-                    <motion.div
-                      initial={{ opacity: 0, y: -5 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className="flex items-center gap-2 mt-2 text-danger text-sm"
-                    >
-                      <AlertCircle size={14} />
-                      <span>{errors.currentAmount}</span>
-                    </motion.div>
-                  )}
-                </div>
-
-                <button
-                  onClick={handleNext}
-                  disabled={!isStep1Valid}
-                  className="w-full py-4 bg-mint text-black font-semibold rounded-xl hover:bg-mint-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          <ScrollView showsVerticalScrollIndicator={false}>
+            <AnimatePresence>
+              {step === 1 ? (
+                <MotiView
+                  key="step1"
+                  from={{ opacity: 0, translateX: -20 }}
+                  animate={{ opacity: 1, translateX: 0 }}
+                  exit={{ opacity: 0, translateX: -20 }}
+                  style={styles.stepContent}
                 >
-                  Continue
-                </button>
-              </motion.div>
-            ) : (
-              <motion.div
-                key="step2"
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: 20 }}
-                className="space-y-5"
-              >
-                {/* Icon Selection */}
-                <div>
-                  <label className="text-xs font-bold text-neutral-500 uppercase tracking-wider block mb-3">
-                    Choose an Icon
-                  </label>
-                  <div className="grid grid-cols-6 gap-2">
-                    {GOAL_ICONS.map(icon => (
-                      <button
-                        key={icon}
-                        onClick={() => setSelectedIcon(icon)}
-                        className={`w-12 h-12 rounded-xl flex items-center justify-center text-2xl transition-all ${
-                          selectedIcon === icon 
-                            ? 'bg-mint/20 border-2 border-mint scale-105' 
-                            : 'bg-surface-300 hover:bg-surface-400'
-                        }`}
-                      >
-                        {icon}
-                      </button>
-                    ))}
-                  </div>
-                </div>
+                  {/* Goal Name */}
+                  <View style={styles.field}>
+                    <Text style={styles.label}>GOAL NAME</Text>
+                    <TextInput
+                      ref={nameInputRef}
+                      value={name}
+                      onChangeText={setName}
+                      placeholder="e.g., Dream Vacation"
+                      placeholderTextColor={colors.neutral600}
+                      style={styles.input}
+                    />
+                  </View>
 
-                {/* Color Selection */}
-                <div>
-                  <label className="text-xs font-bold text-neutral-500 uppercase tracking-wider block mb-3">
-                    Choose a Color
-                  </label>
-                  <div className="flex gap-3 flex-wrap">
-                    {GOAL_COLORS.map(color => (
-                      <button
-                        key={color}
-                        onClick={() => setSelectedColor(color)}
-                        className={`w-10 h-10 rounded-full transition-all flex items-center justify-center ${
-                          selectedColor === color ? 'scale-110 ring-2 ring-white ring-offset-2 ring-offset-surface-200' : 'hover:scale-105'
-                        }`}
-                        style={{ backgroundColor: color }}
-                      >
-                        {selectedColor === color && <Check size={18} className="text-black" />}
-                      </button>
-                    ))}
-                  </div>
-                </div>
+                  {/* Target Amount */}
+                  <View style={styles.field}>
+                    <Text style={styles.label}>TARGET AMOUNT</Text>
+                    <View style={styles.amountInput}>
+                      <Text style={styles.currencySymbol}>$</Text>
+                      <TextInput
+                        value={targetAmount}
+                        onChangeText={setTargetAmount}
+                        placeholder="5,000"
+                        placeholderTextColor={colors.neutral600}
+                        style={styles.amountTextInput}
+                        keyboardType="decimal-pad"
+                      />
+                    </View>
+                  </View>
 
-                {/* Preview */}
-                <div className="bg-surface-100 rounded-xl p-4 border border-surface-300">
-                  <span className="text-xs font-bold text-neutral-500 uppercase tracking-wider block mb-3">Preview</span>
-                  <div className="flex items-center gap-4">
-                    <div 
-                      className="w-14 h-14 rounded-2xl flex items-center justify-center text-2xl"
-                      style={{ backgroundColor: `${selectedColor}20` }}
+                  {/* Starting Amount */}
+                  <View style={styles.field}>
+                    <Text style={styles.label}>
+                      STARTING AMOUNT <Text style={styles.optional}>(Optional)</Text>
+                    </Text>
+                    <View style={styles.amountInput}>
+                      <Text style={styles.currencySymbol}>$</Text>
+                      <TextInput
+                        value={currentAmount}
+                        onChangeText={setCurrentAmount}
+                        placeholder="0"
+                        placeholderTextColor={colors.neutral600}
+                        style={styles.amountTextInput}
+                        keyboardType="decimal-pad"
+                      />
+                    </View>
+                  </View>
+
+                  <TouchableOpacity
+                    onPress={handleNext}
+                    disabled={!isStep1Valid}
+                    style={[styles.continueBtn, !isStep1Valid && styles.continueBtnDisabled]}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={styles.continueBtnText}>Continue</Text>
+                  </TouchableOpacity>
+                </MotiView>
+              ) : (
+                <MotiView
+                  key="step2"
+                  from={{ opacity: 0, translateX: 20 }}
+                  animate={{ opacity: 1, translateX: 0 }}
+                  exit={{ opacity: 0, translateX: 20 }}
+                  style={styles.stepContent}
+                >
+                  {/* Icon Selection */}
+                  <View style={styles.field}>
+                    <Text style={styles.label}>CHOOSE AN ICON</Text>
+                    <View style={styles.iconGrid}>
+                      {GOAL_ICONS.map(icon => (
+                        <TouchableOpacity
+                          key={icon}
+                          onPress={() => {
+                            setSelectedIcon(icon);
+                            Haptics.selectionAsync();
+                          }}
+                          style={[styles.iconBtn, selectedIcon === icon && styles.iconBtnActive]}
+                        >
+                          <Text style={styles.iconText}>{icon}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  </View>
+
+                  {/* Color Selection */}
+                  <View style={styles.field}>
+                    <Text style={styles.label}>CHOOSE A COLOR</Text>
+                    <View style={styles.colorRow}>
+                      {GOAL_COLORS.map(color => (
+                        <TouchableOpacity
+                          key={color}
+                          onPress={() => {
+                            setSelectedColor(color);
+                            Haptics.selectionAsync();
+                          }}
+                          style={[
+                            styles.colorBtn,
+                            { backgroundColor: color },
+                            selectedColor === color && styles.colorBtnActive,
+                          ]}
+                        >
+                          {selectedColor === color && (
+                            <Ionicons name="checkmark" size={18} color={colors.black} />
+                          )}
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  </View>
+
+                  {/* Preview */}
+                  <View style={styles.preview}>
+                    <Text style={styles.previewLabel}>PREVIEW</Text>
+                    <View style={styles.previewCard}>
+                      <View style={[styles.previewIcon, { backgroundColor: `${selectedColor}20` }]}>
+                        <Text style={styles.previewIconText}>{selectedIcon}</Text>
+                      </View>
+                      <View>
+                        <Text style={styles.previewName}>{name || 'Goal Name'}</Text>
+                        <Text style={styles.previewProgress}>
+                          ${parseFloat(currentAmount) || 0} / ${parseFloat(targetAmount) || 0}
+                        </Text>
+                      </View>
+                    </View>
+                  </View>
+
+                  <View style={styles.actions}>
+                    <TouchableOpacity
+                      onPress={() => setStep(1)}
+                      style={styles.backBtn}
+                      activeOpacity={0.7}
                     >
-                      {selectedIcon}
-                    </div>
-                    <div>
-                      <span className="text-white font-semibold block">{name || 'Goal Name'}</span>
-                      <span className="text-neutral-500 text-sm">
-                        {formatCurrency(parseFloat(currentAmount) || 0)} / {formatCurrency(parseFloat(targetAmount) || 0)}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Actions */}
-                <div className="flex gap-3">
-                  <button
-                    onClick={() => setStep(1)}
-                    className="flex-1 py-4 bg-surface-300 text-white font-medium rounded-xl hover:bg-surface-400 transition-colors"
-                  >
-                    Back
-                  </button>
-                  <button
-                    onClick={handleSubmit}
-                    className="flex-1 py-4 bg-mint text-black font-semibold rounded-xl flex items-center justify-center gap-2 hover:bg-mint-hover transition-colors"
-                  >
-                    <Check size={20} />
-                    Create Goal
-                  </button>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </motion.div>
-      </div>
-    </AnimatePresence>
+                      <Text style={styles.backBtnText}>Back</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={handleSubmit}
+                      style={styles.createBtn}
+                      activeOpacity={0.8}
+                    >
+                      <Ionicons name="checkmark" size={20} color={colors.black} />
+                      <Text style={styles.createBtnText}>Create Goal</Text>
+                    </TouchableOpacity>
+                  </View>
+                </MotiView>
+              )}
+            </AnimatePresence>
+          </ScrollView>
+        </MotiView>
+      </KeyboardAvoidingView>
+    </Modal>
   );
 };
+
+const styles = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    justifyContent: 'flex-end',
+  },
+  backdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+  },
+  sheet: {
+    backgroundColor: colors.surface200,
+    borderTopLeftRadius: borderRadius['3xl'],
+    borderTopRightRadius: borderRadius['3xl'],
+    padding: spacing[6],
+    maxHeight: '85%',
+    borderTopWidth: 1,
+    borderTopColor: colors.surface300,
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing[6],
+  },
+  headerIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: borderRadius.xl,
+    backgroundColor: colors.mintMuted,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: spacing[3],
+  },
+  title: {
+    fontSize: typography.fontSizes.xl,
+    fontWeight: typography.fontWeights.semibold,
+    color: colors.white,
+  },
+  closeBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.surface300,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  progressBar: {
+    flexDirection: 'row',
+    gap: spacing[2],
+    marginBottom: spacing[6],
+  },
+  progressStep: {
+    flex: 1,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: colors.surface400,
+  },
+  progressStepActive: {
+    backgroundColor: colors.mint,
+  },
+  stepContent: {
+    gap: spacing[5],
+  },
+  field: {
+    gap: spacing[2],
+  },
+  label: {
+    fontSize: typography.fontSizes.xs,
+    fontWeight: typography.fontWeights.bold,
+    color: colors.neutral500,
+    letterSpacing: typography.letterSpacing.wider,
+  },
+  optional: {
+    color: colors.neutral600,
+  },
+  input: {
+    backgroundColor: colors.surface100,
+    borderWidth: 1,
+    borderColor: colors.surface300,
+    borderRadius: borderRadius.xl,
+    padding: spacing[4],
+    color: colors.white,
+    fontSize: typography.fontSizes.md,
+  },
+  amountInput: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surface100,
+    borderWidth: 1,
+    borderColor: colors.surface300,
+    borderRadius: borderRadius.xl,
+    paddingHorizontal: spacing[4],
+  },
+  currencySymbol: {
+    fontSize: typography.fontSizes.md,
+    fontFamily: 'monospace',
+    color: colors.neutral400,
+  },
+  amountTextInput: {
+    flex: 1,
+    padding: spacing[4],
+    paddingLeft: spacing[2],
+    color: colors.white,
+    fontSize: typography.fontSizes.md,
+    fontFamily: 'monospace',
+  },
+  continueBtn: {
+    backgroundColor: colors.mint,
+    borderRadius: borderRadius.xl,
+    paddingVertical: spacing[4],
+    alignItems: 'center',
+  },
+  continueBtnDisabled: {
+    opacity: 0.5,
+  },
+  continueBtnText: {
+    fontSize: typography.fontSizes.md,
+    fontWeight: typography.fontWeights.semibold,
+    color: colors.black,
+  },
+  iconGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing[2],
+  },
+  iconBtn: {
+    width: 48,
+    height: 48,
+    borderRadius: borderRadius.xl,
+    backgroundColor: colors.surface300,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  iconBtnActive: {
+    backgroundColor: colors.mintMuted,
+    borderWidth: 2,
+    borderColor: colors.mint,
+  },
+  iconText: {
+    fontSize: 24,
+  },
+  colorRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing[3],
+  },
+  colorBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  colorBtnActive: {
+    borderWidth: 3,
+    borderColor: colors.white,
+  },
+  preview: {
+    gap: spacing[3],
+  },
+  previewLabel: {
+    fontSize: typography.fontSizes.xs,
+    fontWeight: typography.fontWeights.bold,
+    color: colors.neutral500,
+    letterSpacing: typography.letterSpacing.wider,
+  },
+  previewCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surface100,
+    borderRadius: borderRadius.xl,
+    borderWidth: 1,
+    borderColor: colors.surface300,
+    padding: spacing[4],
+    gap: spacing[4],
+  },
+  previewIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: borderRadius['2xl'],
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  previewIconText: {
+    fontSize: 28,
+  },
+  previewName: {
+    fontSize: typography.fontSizes.md,
+    fontWeight: typography.fontWeights.semibold,
+    color: colors.white,
+  },
+  previewProgress: {
+    fontSize: typography.fontSizes.sm,
+    color: colors.neutral500,
+  },
+  actions: {
+    flexDirection: 'row',
+    gap: spacing[3],
+  },
+  backBtn: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: spacing[4],
+    backgroundColor: colors.surface300,
+    borderRadius: borderRadius.xl,
+  },
+  backBtnText: {
+    fontSize: typography.fontSizes.md,
+    fontWeight: typography.fontWeights.medium,
+    color: colors.white,
+  },
+  createBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing[2],
+    paddingVertical: spacing[4],
+    backgroundColor: colors.mint,
+    borderRadius: borderRadius.xl,
+  },
+  createBtnText: {
+    fontSize: typography.fontSizes.md,
+    fontWeight: typography.fontWeights.semibold,
+    color: colors.black,
+  },
+});
 
 export default AddGoal;

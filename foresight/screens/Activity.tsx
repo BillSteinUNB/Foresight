@@ -1,72 +1,52 @@
-import React, { useState, useMemo } from 'react';
-import { Search, X, SlidersHorizontal, Trash2 } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { useTransactionStore } from '../stores';
+import React, { useState, useMemo, useCallback } from 'react';
+import { View, Text, ScrollView, TouchableOpacity, TextInput, StyleSheet } from 'react-native';
+import { MotiView, AnimatePresence } from 'moti';
+import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+import { useApp } from '../context/AppContext';
 import TransactionItem from '../components/TransactionItem';
 import TransactionDetail from '../components/TransactionDetail';
 import { formatDate, formatCurrency } from '../utils';
 import { Transaction, BudgetCategory } from '../types';
+import { colors, spacing, borderRadius, typography, commonStyles } from '../theme';
 
 type FilterType = 'all' | 'income' | 'expense';
+
+const CATEGORY_LABELS: Record<BudgetCategory, string> = {
+  food_dining: '🍔 Food',
+  transportation: '🚕 Transport',
+  shopping: '🛍️ Shopping',
+  entertainment: '🎬 Fun',
+  bills_utilities: '💡 Bills',
+  health_fitness: '💪 Health',
+  travel: '✈️ Travel',
+  income: '💰 Income',
+  subscriptions: '🔄 Subs',
+  other: '📦 Other',
+};
 
 interface FilterChipProps {
   label: string;
   active: boolean;
-  onClick: () => void;
-  count?: number;
+  onPress: () => void;
 }
 
-const FilterChip: React.FC<FilterChipProps> = ({ label, active, onClick, count }) => (
-  <button 
-    onClick={onClick}
-    className={`px-4 py-2 font-semibold rounded-full text-xs transition-all flex items-center gap-1.5 ${
-      active 
-        ? 'bg-mint text-black' 
-        : 'bg-surface-200 text-neutral-400 hover:bg-surface-300 hover:text-neutral-200'
-    }`}
+const FilterChip: React.FC<FilterChipProps> = ({ label, active, onPress }) => (
+  <TouchableOpacity
+    onPress={onPress}
+    style={[styles.filterChip, active && styles.filterChipActive]}
+    activeOpacity={0.7}
   >
-    {label}
-    {count !== undefined && (
-      <span className={`${active ? 'text-black/60' : 'text-neutral-600'}`}>
-        {count}
-      </span>
-    )}
-  </button>
+    <Text style={[styles.filterChipText, active && styles.filterChipTextActive]}>
+      {label}
+    </Text>
+  </TouchableOpacity>
 );
 
-const CategoryPill: React.FC<{ category: BudgetCategory; active: boolean; onClick: () => void }> = ({ 
-  category, 
-  active, 
-  onClick 
-}) => {
-  const labels: Record<BudgetCategory, string> = {
-    food_dining: '🍔 Food',
-    transportation: '🚕 Transport',
-    shopping: '🛍️ Shopping',
-    entertainment: '🎬 Fun',
-    bills_utilities: '💡 Bills',
-    health_fitness: '💪 Health',
-    travel: '✈️ Travel',
-    income: '💰 Income',
-    subscriptions: '🔄 Subs',
-    other: '📦 Other'
-  };
-
-  return (
-    <button 
-      onClick={onClick}
-      className={`px-3 py-1.5 rounded-full text-xs whitespace-nowrap transition-all ${
-        active 
-          ? 'bg-mint/20 text-mint border border-mint/50' 
-          : 'bg-surface-300 text-neutral-400 hover:bg-surface-400'
-      }`}
-    >
-      {labels[category]}
-    </button>
-  );
-};
-
 const Activity: React.FC = () => {
+  const insets = useSafeAreaInsets();
+  const { transactions } = useApp();
   const [filter, setFilter] = useState<FilterType>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategories, setSelectedCategories] = useState<Set<BudgetCategory>>(new Set());
@@ -74,10 +54,7 @@ const Activity: React.FC = () => {
   const [showFilters, setShowFilters] = useState(false);
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
 
-  // Store hooks
-  const { transactions, deleteTransaction, getTotalByType } = useTransactionStore();
-
-  // All available categories from transactions
+  // All available categories
   const allCategories = useMemo(() => {
     const cats = new Set<BudgetCategory>();
     transactions.forEach(t => cats.add(t.category));
@@ -87,32 +64,22 @@ const Activity: React.FC = () => {
   // Filter transactions
   const filteredTransactions = useMemo(() => {
     return transactions.filter(t => {
-      // Type filter
       if (filter === 'income' && t.type !== 'income') return false;
       if (filter === 'expense' && t.type !== 'expense') return false;
-
-      // Category filter
       if (selectedCategories.size > 0 && !selectedCategories.has(t.category)) return false;
-
-      // Search filter
       if (searchQuery.trim()) {
         const query = searchQuery.toLowerCase();
         const matchesMerchant = t.merchantName.toLowerCase().includes(query);
         const matchesCategory = t.category.toLowerCase().includes(query);
-        const matchesAmount = t.amount.toString().includes(query);
-        if (!matchesMerchant && !matchesCategory && !matchesAmount) return false;
+        if (!matchesMerchant && !matchesCategory) return false;
       }
-
       return true;
     });
   }, [transactions, filter, searchQuery, selectedCategories]);
 
-  // Group filtered transactions by date
+  // Group by date
   const grouped = useMemo(() => {
-    const sorted = [...filteredTransactions].sort(
-      (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
-    );
-    return sorted.reduce((acc, t) => {
+    return filteredTransactions.reduce((acc, t) => {
       const date = formatDate(t.date);
       if (!acc[date]) acc[date] = [];
       acc[date].push(t);
@@ -120,248 +87,431 @@ const Activity: React.FC = () => {
     }, {} as Record<string, Transaction[]>);
   }, [filteredTransactions]);
 
-  const toggleCategory = (category: BudgetCategory) => {
+  // Totals
+  const totals = useMemo(() => {
+    const income = filteredTransactions.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0);
+    const expenses = filteredTransactions.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0);
+    return { income, expenses, net: income - expenses };
+  }, [filteredTransactions]);
+
+  const toggleCategory = useCallback((category: BudgetCategory) => {
     setSelectedCategories(prev => {
       const next = new Set(prev);
-      if (next.has(category)) {
-        next.delete(category);
-      } else {
-        next.add(category);
-      }
+      if (next.has(category)) next.delete(category);
+      else next.add(category);
       return next;
     });
-  };
+  }, []);
 
-  const clearFilters = () => {
+  const clearFilters = useCallback(() => {
     setFilter('all');
     setSearchQuery('');
     setSelectedCategories(new Set());
     setShowFilters(false);
-  };
-
-  const handleDeleteTransaction = (id: string) => {
-    deleteTransaction(id);
-    setSelectedTransaction(null);
-  };
+  }, []);
 
   const hasActiveFilters = filter !== 'all' || searchQuery.trim() || selectedCategories.size > 0;
 
-  // Calculate totals for header stats
-  const totals = useMemo(() => {
-    const income = filteredTransactions
-      .filter(t => t.type === 'income')
-      .reduce((sum, t) => sum + t.amount, 0);
-    const expenses = filteredTransactions
-      .filter(t => t.type === 'expense')
-      .reduce((sum, t) => sum + t.amount, 0);
-    return { income, expenses, net: income - expenses };
-  }, [filteredTransactions]);
-
-  // Counts for filter chips
-  const incomeCount = transactions.filter(t => t.type === 'income').length;
-  const expenseCount = transactions.filter(t => t.type === 'expense').length;
-
   return (
-    <div className="pb-24 pt-4 px-4 min-h-screen">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-4">
-        <h1 className="text-2xl font-bold text-white">Activity</h1>
-        <div className="flex items-center gap-2">
-          <button 
-            onClick={() => setIsSearchOpen(!isSearchOpen)}
-            className={`p-2.5 rounded-full transition-colors ${isSearchOpen ? 'bg-mint text-black' : 'bg-surface-200 text-neutral-400 hover:text-white'}`}
-          >
-            <Search size={18} />
-          </button>
-          <button 
-            onClick={() => setShowFilters(!showFilters)}
-            className={`p-2.5 rounded-full transition-colors relative ${showFilters ? 'bg-mint text-black' : 'bg-surface-200 text-neutral-400 hover:text-white'}`}
-          >
-            <SlidersHorizontal size={18} />
-            {hasActiveFilters && !showFilters && (
-              <div className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-mint rounded-full border-2 border-black" />
-            )}
-          </button>
-        </div>
-      </div>
+    <View style={[styles.container, { paddingTop: insets.top }]}>
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.contentContainer}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Header */}
+        <View style={styles.header}>
+          <Text style={styles.title}>Activity</Text>
+          <View style={commonStyles.row}>
+            <TouchableOpacity
+              onPress={() => setIsSearchOpen(!isSearchOpen)}
+              style={[styles.iconButton, isSearchOpen && styles.iconButtonActive]}
+            >
+              <Ionicons name="search" size={18} color={isSearchOpen ? colors.black : colors.neutral400} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => setShowFilters(!showFilters)}
+              style={[styles.iconButton, showFilters && styles.iconButtonActive]}
+            >
+              <Ionicons name="options-outline" size={18} color={showFilters ? colors.black : colors.neutral400} />
+              {hasActiveFilters && !showFilters && <View style={styles.filterBadge} />}
+            </TouchableOpacity>
+          </View>
+        </View>
 
-      {/* Search Bar */}
-      <AnimatePresence>
-        {isSearchOpen && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            className="overflow-hidden mb-4"
-          >
-            <div className="relative">
-              <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-500" />
-              <input
-                type="text"
-                placeholder="Search transactions..."
+        {/* Search Bar */}
+        <AnimatePresence>
+          {isSearchOpen && (
+            <MotiView
+              from={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 56 }}
+              exit={{ opacity: 0, height: 0 }}
+              style={styles.searchContainer}
+            >
+              <Ionicons name="search" size={18} color={colors.neutral500} style={styles.searchIcon} />
+              <TextInput
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full bg-surface-200 border border-surface-300 rounded-xl py-3 pl-11 pr-10 text-white placeholder:text-neutral-600 focus:outline-none focus:border-mint"
+                onChangeText={setSearchQuery}
+                placeholder="Search transactions..."
+                placeholderTextColor={colors.neutral600}
+                style={styles.searchInput}
                 autoFocus
               />
-              {searchQuery && (
-                <button 
-                  onClick={() => setSearchQuery('')}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 p-1 bg-surface-300 rounded-full hover:bg-surface-400"
-                >
-                  <X size={14} className="text-neutral-400" />
-                </button>
+              {searchQuery.length > 0 && (
+                <TouchableOpacity onPress={() => setSearchQuery('')} style={styles.clearButton}>
+                  <Ionicons name="close-circle" size={18} color={colors.neutral400} />
+                </TouchableOpacity>
               )}
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+            </MotiView>
+          )}
+        </AnimatePresence>
 
-      {/* Type Filters */}
-      <div className="flex gap-2 mb-4 overflow-x-auto no-scrollbar">
-        <FilterChip 
-          label="All" 
-          active={filter === 'all'} 
-          onClick={() => setFilter('all')} 
-          count={transactions.length}
-        />
-        <FilterChip 
-          label="Income" 
-          active={filter === 'income'} 
-          onClick={() => setFilter('income')} 
-          count={incomeCount}
-        />
-        <FilterChip 
-          label="Expenses" 
-          active={filter === 'expense'} 
-          onClick={() => setFilter('expense')} 
-          count={expenseCount}
-        />
-      </div>
+        {/* Type Filters */}
+        <View style={styles.filterRow}>
+          <FilterChip label="All" active={filter === 'all'} onPress={() => setFilter('all')} />
+          <FilterChip label="Income" active={filter === 'income'} onPress={() => setFilter('income')} />
+          <FilterChip label="Expenses" active={filter === 'expense'} onPress={() => setFilter('expense')} />
+        </View>
 
-      {/* Category Filters */}
-      <AnimatePresence>
-        {showFilters && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            className="overflow-hidden mb-4"
-          >
-            <div className="bg-surface-200 rounded-2xl border border-surface-300 p-4 space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-neutral-500 uppercase tracking-wider">Categories</span>
+        {/* Category Filters */}
+        <AnimatePresence>
+          {showFilters && (
+            <MotiView
+              from={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              style={styles.categoryFilters}
+            >
+              <View style={commonStyles.rowBetween}>
+                <Text style={styles.categoryLabel}>Categories</Text>
                 {selectedCategories.size > 0 && (
-                  <button 
-                    onClick={() => setSelectedCategories(new Set())}
-                    className="text-xs text-mint hover:underline"
-                  >
-                    Clear
-                  </button>
+                  <TouchableOpacity onPress={() => setSelectedCategories(new Set())}>
+                    <Text style={styles.clearText}>Clear</Text>
+                  </TouchableOpacity>
                 )}
-              </div>
-              <div className="flex flex-wrap gap-2">
+              </View>
+              <View style={styles.categoryPills}>
                 {allCategories.map(cat => (
-                  <CategoryPill 
-                    key={cat} 
-                    category={cat} 
-                    active={selectedCategories.has(cat)}
-                    onClick={() => toggleCategory(cat)}
-                  />
+                  <TouchableOpacity
+                    key={cat}
+                    onPress={() => toggleCategory(cat)}
+                    style={[styles.categoryPill, selectedCategories.has(cat) && styles.categoryPillActive]}
+                  >
+                    <Text style={[styles.categoryPillText, selectedCategories.has(cat) && styles.categoryPillTextActive]}>
+                      {CATEGORY_LABELS[cat]}
+                    </Text>
+                  </TouchableOpacity>
                 ))}
-              </div>
-            </div>
-          </motion.div>
+              </View>
+            </MotiView>
+          )}
+        </AnimatePresence>
+
+        {/* Stats Summary */}
+        {filteredTransactions.length > 0 && (
+          <View style={styles.statsSummary}>
+            <View style={styles.statItem}>
+              <Text style={styles.statLabel}>Income</Text>
+              <Text style={[styles.statValue, { color: colors.mint }]}>+{formatCurrency(totals.income)}</Text>
+            </View>
+            <View style={styles.statDivider} />
+            <View style={styles.statItem}>
+              <Text style={styles.statLabel}>Expenses</Text>
+              <Text style={styles.statValue}>-{formatCurrency(totals.expenses)}</Text>
+            </View>
+            <View style={styles.statDivider} />
+            <View style={styles.statItem}>
+              <Text style={styles.statLabel}>Net</Text>
+              <Text style={[styles.statValue, { color: totals.net >= 0 ? colors.mint : colors.danger }]}>
+                {totals.net >= 0 ? '+' : ''}{formatCurrency(totals.net)}
+              </Text>
+            </View>
+          </View>
         )}
-      </AnimatePresence>
 
-      {/* Stats Summary */}
-      {filteredTransactions.length > 0 && (
-        <div className="flex justify-between items-center bg-surface-200/50 rounded-xl p-3 mb-6 border border-surface-300/50">
-          <div className="text-center flex-1">
-            <span className="text-neutral-500 text-xs block mb-0.5">Income</span>
-            <span className="text-mint font-mono text-sm font-medium">+{formatCurrency(totals.income)}</span>
-          </div>
-          <div className="w-px h-8 bg-surface-300" />
-          <div className="text-center flex-1">
-            <span className="text-neutral-500 text-xs block mb-0.5">Expenses</span>
-            <span className="text-white font-mono text-sm font-medium">-{formatCurrency(totals.expenses)}</span>
-          </div>
-          <div className="w-px h-8 bg-surface-300" />
-          <div className="text-center flex-1">
-            <span className="text-neutral-500 text-xs block mb-0.5">Net</span>
-            <span className={`font-mono text-sm font-medium ${totals.net >= 0 ? 'text-mint' : 'text-danger'}`}>
-              {totals.net >= 0 ? '+' : ''}{formatCurrency(totals.net)}
-            </span>
-          </div>
-        </div>
-      )}
-
-      {/* Transaction List */}
-      <div className="space-y-6">
+        {/* Transaction List */}
         {Object.keys(grouped).length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16 text-center">
-            <div className="w-16 h-16 bg-surface-200 rounded-full flex items-center justify-center mb-4 text-3xl">
-              🔍
-            </div>
-            <h3 className="text-white font-semibold mb-2">No transactions found</h3>
-            <p className="text-neutral-500 text-sm max-w-[240px]">
-              {hasActiveFilters 
-                ? "Try adjusting your filters to see more results" 
-                : "Add your first transaction to get started"}
-            </p>
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyIcon}>🔍</Text>
+            <Text style={styles.emptyTitle}>No transactions found</Text>
+            <Text style={styles.emptyText}>
+              {hasActiveFilters ? 'Try adjusting your filters' : 'Add your first transaction'}
+            </Text>
             {hasActiveFilters && (
-              <button 
-                onClick={clearFilters}
-                className="mt-4 px-4 py-2 bg-mint text-black font-semibold rounded-full text-sm"
-              >
-                Clear Filters
-              </button>
+              <TouchableOpacity onPress={clearFilters} style={styles.clearFiltersBtn}>
+                <Text style={styles.clearFiltersBtnText}>Clear Filters</Text>
+              </TouchableOpacity>
             )}
-          </div>
+          </View>
         ) : (
-          Object.entries(grouped).map(([date, dayTransactions]) => {
-            const dailyTotal = dayTransactions.reduce(
-              (sum, t) => t.type === 'expense' ? sum - t.amount : sum + t.amount, 
-              0
+          Object.entries(grouped).map(([date, dateTransactions]) => {
+            const dailyTotal = dateTransactions.reduce(
+              (sum, t) => t.type === 'expense' ? sum - t.amount : sum + t.amount, 0
             );
-            
             return (
-              <motion.div 
+              <MotiView
                 key={date}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
+                from={{ opacity: 0, translateY: 10 }}
+                animate={{ opacity: 1, translateY: 0 }}
+                style={styles.dateSection}
               >
-                <div className="flex justify-between items-center mb-2 px-2 sticky top-0 bg-black/90 backdrop-blur-md py-2 z-10">
-                  <span className="text-neutral-400 font-medium text-sm">{date}</span>
-                  <span className={`text-sm font-mono ${dailyTotal > 0 ? 'text-mint' : 'text-neutral-500'}`}>
+                <View style={styles.dateHeader}>
+                  <Text style={styles.dateText}>{date}</Text>
+                  <Text style={[styles.dailyTotal, dailyTotal > 0 && { color: colors.mint }]}>
                     {dailyTotal > 0 ? '+' : ''}{formatCurrency(dailyTotal)}
-                  </span>
-                </div>
-                <div className="bg-surface-200 rounded-2xl border border-surface-300 overflow-hidden">
-                  {dayTransactions.map(t => (
-                    <TransactionItem 
-                      key={t.id} 
-                      transaction={t} 
-                      onClick={() => setSelectedTransaction(t)} 
+                  </Text>
+                </View>
+                <View style={styles.transactionList}>
+                  {dateTransactions.map(t => (
+                    <TransactionItem
+                      key={t.id}
+                      transaction={t}
+                      onPress={() => setSelectedTransaction(t)}
                     />
                   ))}
-                </div>
-              </motion.div>
+                </View>
+              </MotiView>
             );
           })
         )}
-      </div>
+      </ScrollView>
 
-      {/* Transaction Detail Modal */}
       <TransactionDetail
         transaction={selectedTransaction}
         isOpen={!!selectedTransaction}
         onClose={() => setSelectedTransaction(null)}
-        onDelete={handleDeleteTransaction}
       />
-    </div>
+    </View>
   );
 };
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: colors.black,
+  },
+  scrollView: {
+    flex: 1,
+  },
+  contentContainer: {
+    paddingHorizontal: spacing[4],
+    paddingBottom: spacing[24],
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing[4],
+    marginTop: spacing[4],
+  },
+  title: {
+    fontSize: typography.fontSizes['2xl'],
+    fontWeight: typography.fontWeights.bold,
+    color: colors.white,
+  },
+  iconButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.surface200,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: spacing[2],
+  },
+  iconButtonActive: {
+    backgroundColor: colors.mint,
+  },
+  filterBadge: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: colors.mint,
+    borderWidth: 2,
+    borderColor: colors.black,
+  },
+  searchContainer: {
+    marginBottom: spacing[4],
+  },
+  searchIcon: {
+    position: 'absolute',
+    left: spacing[4],
+    top: 18,
+    zIndex: 1,
+  },
+  searchInput: {
+    backgroundColor: colors.surface200,
+    borderWidth: 1,
+    borderColor: colors.surface300,
+    borderRadius: borderRadius.xl,
+    paddingVertical: spacing[3],
+    paddingLeft: spacing[11],
+    paddingRight: spacing[10],
+    color: colors.white,
+    fontSize: typography.fontSizes.base,
+  },
+  clearButton: {
+    position: 'absolute',
+    right: spacing[3],
+    top: 16,
+  },
+  filterRow: {
+    flexDirection: 'row',
+    gap: spacing[2],
+    marginBottom: spacing[4],
+  },
+  filterChip: {
+    paddingHorizontal: spacing[4],
+    paddingVertical: spacing[2],
+    borderRadius: borderRadius.full,
+    backgroundColor: colors.surface200,
+  },
+  filterChipActive: {
+    backgroundColor: colors.mint,
+  },
+  filterChipText: {
+    fontSize: typography.fontSizes.xs,
+    fontWeight: typography.fontWeights.semibold,
+    color: colors.neutral400,
+  },
+  filterChipTextActive: {
+    color: colors.black,
+  },
+  categoryFilters: {
+    backgroundColor: colors.surface200,
+    borderRadius: borderRadius['2xl'],
+    borderWidth: 1,
+    borderColor: colors.surface300,
+    padding: spacing[4],
+    marginBottom: spacing[4],
+  },
+  categoryLabel: {
+    fontSize: typography.fontSizes.xs,
+    fontWeight: typography.fontWeights.bold,
+    color: colors.neutral500,
+    textTransform: 'uppercase',
+    letterSpacing: typography.letterSpacing.wider,
+  },
+  clearText: {
+    fontSize: typography.fontSizes.xs,
+    color: colors.mint,
+  },
+  categoryPills: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing[2],
+    marginTop: spacing[3],
+  },
+  categoryPill: {
+    paddingHorizontal: spacing[3],
+    paddingVertical: spacing[1.5],
+    borderRadius: borderRadius.full,
+    backgroundColor: colors.surface300,
+  },
+  categoryPillActive: {
+    backgroundColor: colors.mintMuted,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 217, 165, 0.5)',
+  },
+  categoryPillText: {
+    fontSize: typography.fontSizes.xs,
+    color: colors.neutral400,
+  },
+  categoryPillTextActive: {
+    color: colors.mint,
+  },
+  statsSummary: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(17, 17, 17, 0.5)',
+    borderRadius: borderRadius.xl,
+    borderWidth: 1,
+    borderColor: 'rgba(26, 26, 26, 0.5)',
+    padding: spacing[3],
+    marginBottom: spacing[6],
+  },
+  statItem: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  statLabel: {
+    fontSize: typography.fontSizes.xs,
+    color: colors.neutral500,
+    marginBottom: spacing[0.5],
+  },
+  statValue: {
+    fontSize: typography.fontSizes.sm,
+    fontFamily: 'monospace',
+    fontWeight: typography.fontWeights.medium,
+    color: colors.white,
+  },
+  statDivider: {
+    width: 1,
+    height: 32,
+    backgroundColor: colors.surface300,
+  },
+  emptyState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: spacing[16],
+  },
+  emptyIcon: {
+    fontSize: 48,
+    marginBottom: spacing[4],
+  },
+  emptyTitle: {
+    fontSize: typography.fontSizes.lg,
+    fontWeight: typography.fontWeights.semibold,
+    color: colors.white,
+    marginBottom: spacing[2],
+  },
+  emptyText: {
+    fontSize: typography.fontSizes.sm,
+    color: colors.neutral500,
+    textAlign: 'center',
+    maxWidth: 240,
+  },
+  clearFiltersBtn: {
+    marginTop: spacing[4],
+    paddingHorizontal: spacing[4],
+    paddingVertical: spacing[2],
+    backgroundColor: colors.mint,
+    borderRadius: borderRadius.full,
+  },
+  clearFiltersBtnText: {
+    fontSize: typography.fontSizes.sm,
+    fontWeight: typography.fontWeights.semibold,
+    color: colors.black,
+  },
+  dateSection: {
+    marginBottom: spacing[6],
+  },
+  dateHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: spacing[2],
+    marginBottom: spacing[2],
+  },
+  dateText: {
+    fontSize: typography.fontSizes.sm,
+    fontWeight: typography.fontWeights.medium,
+    color: colors.neutral400,
+  },
+  dailyTotal: {
+    fontSize: typography.fontSizes.sm,
+    fontFamily: 'monospace',
+    color: colors.neutral500,
+  },
+  transactionList: {
+    backgroundColor: colors.surface200,
+    borderRadius: borderRadius['2xl'],
+    borderWidth: 1,
+    borderColor: colors.surface300,
+    overflow: 'hidden',
+  },
+});
 
 export default Activity;

@@ -114,7 +114,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     }));
   }, []);
 
-  // Memoize context value to prevent unnecessary re-renders
+  // Memoize context value
   const value = useMemo(() => ({
     transactions,
     addTransaction,
@@ -167,4 +167,3 @@ export const useApp = (): AppContextType => {
 };
 
 export default AppContext;
-

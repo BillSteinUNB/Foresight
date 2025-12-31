@@ -1,78 +1,135 @@
 import React, { useCallback } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, Image } from 'react-native';
 import { Transaction } from '../types';
 import { formatCurrency, getCategoryIcon } from '../utils';
+import { colors, spacing, borderRadius, typography, commonStyles } from '../theme';
 
 interface Props {
   transaction: Transaction;
-  onClick: () => void;
+  onPress: () => void;
 }
 
-const TransactionItem: React.FC<Props> = ({ transaction, onClick }) => {
+const TransactionItem: React.FC<Props> = ({ transaction, onPress }) => {
   const isExpense = transaction.type === 'expense';
-  
-  const handleClick = useCallback(() => {
-    onClick();
-  }, [onClick]);
-
-  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' || e.key === ' ') {
-      e.preventDefault();
-      onClick();
-    }
-  }, [onClick]);
 
   return (
-    <div 
-      onClick={handleClick}
-      onKeyDown={handleKeyDown}
-      role="button"
-      tabIndex={0}
-      aria-label={`${transaction.merchantName}, ${isExpense ? 'expense' : 'income'} of ${formatCurrency(transaction.amount)}, category ${transaction.category.replace('_', ' ')}${transaction.status === 'pending' ? ', pending' : ''}`}
-      className="flex items-center justify-between p-4 bg-surface-200/50 backdrop-blur-sm active:bg-surface-300 transition-colors cursor-pointer border-b border-surface-300/30 first:rounded-t-xl last:rounded-b-xl last:border-0 focus:outline-none focus:ring-2 focus:ring-mint focus:ring-inset"
+    <TouchableOpacity
+      onPress={onPress}
+      style={styles.container}
+      activeOpacity={0.7}
     >
-      <div className="flex items-center gap-4">
+      <View style={commonStyles.row}>
         {/* Icon/Logo */}
-        <div className="w-10 h-10 rounded-full flex items-center justify-center overflow-hidden bg-surface-300 shrink-0">
+        <View style={styles.iconContainer}>
           {transaction.merchantLogo ? (
-            <img 
-              src={transaction.merchantLogo} 
-              alt=""
-              className="w-full h-full object-cover"
-              onError={(e) => {
-                (e.target as HTMLImageElement).style.display = 'none';
-              }}
+            <Image
+              source={{ uri: transaction.merchantLogo }}
+              style={styles.logo}
+              resizeMode="cover"
             />
           ) : (
-            <span className="text-xl" aria-hidden="true">{getCategoryIcon(transaction.category)}</span>
+            <Text style={styles.categoryIcon}>{getCategoryIcon(transaction.category)}</Text>
           )}
-        </div>
-        
+        </View>
+
         {/* Info */}
-        <div className="flex flex-col">
-          <span className="text-white font-medium text-sm sm:text-base line-clamp-1">
+        <View style={styles.info}>
+          <Text style={styles.merchantName} numberOfLines={1}>
             {transaction.merchantName}
-          </span>
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-neutral-400 capitalize">
+          </Text>
+          <View style={commonStyles.row}>
+            <Text style={styles.category}>
               {transaction.category.replace('_', ' ')}
-            </span>
-            <span className="text-xs text-neutral-600" aria-hidden="true">•</span>
-            <span className="text-xs text-neutral-500 font-mono">****4521</span>
-          </div>
-        </div>
-      </div>
+            </Text>
+            <Text style={styles.dot}>•</Text>
+            <Text style={styles.account}>****4521</Text>
+          </View>
+        </View>
+      </View>
 
       {/* Amount */}
-      <div className="flex flex-col items-end">
-        <span className={`font-mono font-medium ${isExpense ? 'text-white' : 'text-mint'}`}>
+      <View style={styles.amountContainer}>
+        <Text style={[styles.amount, !isExpense && styles.incomeAmount]}>
           {isExpense ? '-' : '+'}{formatCurrency(transaction.amount)}
-        </span>
+        </Text>
         {transaction.status === 'pending' && (
-          <span className="text-[10px] text-neutral-500 uppercase tracking-wide">Pending</span>
+          <Text style={styles.pendingLabel}>PENDING</Text>
         )}
-      </div>
-    </div>
+      </View>
+    </TouchableOpacity>
   );
 };
+
+const styles = StyleSheet.create({
+  container: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: spacing[4],
+    backgroundColor: 'rgba(17, 17, 17, 0.5)',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(26, 26, 26, 0.3)',
+  },
+  iconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.surface300,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+    marginRight: spacing[4],
+  },
+  logo: {
+    width: '100%',
+    height: '100%',
+  },
+  categoryIcon: {
+    fontSize: 20,
+  },
+  info: {
+    flex: 1,
+  },
+  merchantName: {
+    fontSize: typography.fontSizes.base,
+    fontWeight: typography.fontWeights.medium,
+    color: colors.white,
+    marginBottom: spacing[0.5],
+  },
+  category: {
+    fontSize: typography.fontSizes.xs,
+    color: colors.neutral400,
+    textTransform: 'capitalize',
+  },
+  dot: {
+    fontSize: typography.fontSizes.xs,
+    color: colors.neutral600,
+    marginHorizontal: spacing[2],
+  },
+  account: {
+    fontSize: typography.fontSizes.xs,
+    fontFamily: 'monospace',
+    color: colors.neutral500,
+  },
+  amountContainer: {
+    alignItems: 'flex-end',
+  },
+  amount: {
+    fontSize: typography.fontSizes.base,
+    fontFamily: 'monospace',
+    fontWeight: typography.fontWeights.medium,
+    color: colors.white,
+  },
+  incomeAmount: {
+    color: colors.mint,
+  },
+  pendingLabel: {
+    fontSize: 10,
+    color: colors.neutral500,
+    textTransform: 'uppercase',
+    letterSpacing: typography.letterSpacing.wide,
+    marginTop: spacing[0.5],
+  },
+});
 
 export default React.memo(TransactionItem);

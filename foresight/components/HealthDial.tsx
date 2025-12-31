@@ -1,16 +1,18 @@
 import React from 'react';
-import { motion } from 'framer-motion';
+import { View, Text, StyleSheet } from 'react-native';
+import Svg, { Path } from 'react-native-svg';
+import { MotiView } from 'moti';
+import { colors, spacing, typography } from '../theme';
 
-// Constants for health score thresholds
 const SCORE_THRESHOLDS = {
   LOW: 40,
   MEDIUM: 60,
 } as const;
 
 const SCORE_COLORS = {
-  LOW: '#FF3B5C',    // danger
-  MEDIUM: '#FFB800', // warning
-  HIGH: '#00D9A5',   // mint
+  LOW: colors.danger,
+  MEDIUM: colors.warning,
+  HIGH: colors.mint,
 } as const;
 
 const SCORE_LABELS = {
@@ -24,12 +26,10 @@ interface HealthDialProps {
 }
 
 const HealthDial: React.FC<HealthDialProps> = ({ score }) => {
-  const radius = 80;
-  const stroke = 12;
   const normalizedScore = Math.min(Math.max(score, 0), 100);
+  const radius = 80;
+  const strokeWidth = 12;
   const circumference = radius * Math.PI;
-  const arcLength = circumference; // Semi-circle
-  const strokeDashoffset = arcLength - (normalizedScore / 100) * arcLength;
 
   const getColor = (s: number): string => {
     if (s < SCORE_THRESHOLDS.LOW) return SCORE_COLORS.LOW;
@@ -45,55 +45,67 @@ const HealthDial: React.FC<HealthDialProps> = ({ score }) => {
 
   const color = getColor(normalizedScore);
   const label = getLabel(normalizedScore);
+  const progress = (normalizedScore / 100) * circumference;
 
   return (
-    <div 
-      className="relative w-48 h-28 flex justify-center overflow-hidden"
-      role="meter"
-      aria-valuenow={normalizedScore}
-      aria-valuemin={0}
-      aria-valuemax={100}
-      aria-label={`Financial health score: ${normalizedScore} out of 100, ${label}`}
-    >
-      <svg className="w-full h-full overflow-visible" viewBox="0 0 200 110" aria-hidden="true">
+    <View style={styles.container}>
+      <Svg width={200} height={110} viewBox="0 0 200 110">
         {/* Background Arc */}
-        <path
+        <Path
           d="M 20 100 A 80 80 0 0 1 180 100"
           fill="none"
-          stroke="#1A1A1A"
-          strokeWidth={stroke}
+          stroke={colors.surface300}
+          strokeWidth={strokeWidth}
           strokeLinecap="round"
         />
         {/* Progress Arc */}
-        <motion.path
+        <Path
           d="M 20 100 A 80 80 0 0 1 180 100"
           fill="none"
           stroke={color}
-          strokeWidth={stroke}
+          strokeWidth={strokeWidth}
           strokeLinecap="round"
-          strokeDasharray={arcLength}
-          strokeDashoffset={arcLength}
-          animate={{ strokeDashoffset: strokeDashoffset }}
-          transition={{ duration: 1.5, ease: "easeOut" }}
+          strokeDasharray={circumference}
+          strokeDashoffset={circumference - progress}
         />
-      </svg>
+      </Svg>
       
-      {/* Label */}
-      <div className="absolute bottom-0 flex flex-col items-center">
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 1 }}
-          className="text-center"
-        >
-          <span className="text-3xl font-light text-white font-sans block">{score}</span>
-          <span className="text-xs uppercase tracking-wider font-semibold" style={{ color }}>
-            {label}
-          </span>
-        </motion.div>
-      </div>
-    </div>
+      <MotiView
+        from={{ opacity: 0, translateY: 10 }}
+        animate={{ opacity: 1, translateY: 0 }}
+        transition={{ delay: 500, type: 'timing', duration: 500 }}
+        style={styles.labelContainer}
+      >
+        <Text style={styles.scoreText}>{score}</Text>
+        <Text style={[styles.labelText, { color }]}>{label}</Text>
+      </MotiView>
+    </View>
   );
 };
+
+const styles = StyleSheet.create({
+  container: {
+    width: 200,
+    height: 110,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  labelContainer: {
+    position: 'absolute',
+    bottom: 0,
+    alignItems: 'center',
+  },
+  scoreText: {
+    fontSize: typography.fontSizes['3xl'],
+    fontWeight: typography.fontWeights.light,
+    color: colors.white,
+  },
+  labelText: {
+    fontSize: typography.fontSizes.xs,
+    fontWeight: typography.fontWeights.semibold,
+    textTransform: 'uppercase',
+    letterSpacing: typography.letterSpacing.wider,
+  },
+});
 
 export default HealthDial;

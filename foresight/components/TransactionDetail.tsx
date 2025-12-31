@@ -1,224 +1,314 @@
-import React, { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { X, MapPin, Calendar, CreditCard, Tag, Repeat, Edit2, Trash2, Share2, AlertTriangle } from 'lucide-react';
+import React, { useCallback } from 'react';
+import { View, Text, TouchableOpacity, Modal, StyleSheet, ScrollView } from 'react-native';
+import { MotiView } from 'moti';
+import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
+
 import { Transaction } from '../types';
 import { formatCurrency, getCategoryIcon, getCategoryColor } from '../utils';
+import { colors, spacing, borderRadius, typography, commonStyles } from '../theme';
 
 interface Props {
   transaction: Transaction | null;
   isOpen: boolean;
   onClose: () => void;
-  onDelete?: (id: string) => void;
 }
 
-const TransactionDetail: React.FC<Props> = ({ transaction, isOpen, onClose, onDelete }) => {
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-
+const TransactionDetail: React.FC<Props> = ({ transaction, isOpen, onClose }) => {
   if (!transaction) return null;
 
   const isExpense = transaction.type === 'expense';
   const categoryColor = getCategoryColor(transaction.category);
-  
+
   const formatDateTime = (dateString: string) => {
     const date = new Date(dateString);
     return {
       date: date.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }),
-      time: date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
+      time: date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }),
     };
   };
 
   const { date, time } = formatDateTime(transaction.date);
 
-  const handleDelete = () => {
-    if (onDelete) {
-      onDelete(transaction.id);
-    }
-    setShowDeleteConfirm(false);
-    onClose();
-  };
-
-  const DetailRow = ({ icon: Icon, label, value, color }: { 
-    icon: React.ElementType; 
-    label: string; 
+  const DetailRow = ({ icon, label, value, valueColor }: {
+    icon: keyof typeof Ionicons.glyphMap;
+    label: string;
     value: string;
-    color?: string;
+    valueColor?: string;
   }) => (
-    <div className="flex items-center justify-between py-3 border-b border-surface-300/50 last:border-0">
-      <div className="flex items-center gap-3">
-        <Icon size={18} className="text-neutral-500" />
-        <span className="text-neutral-400 text-sm">{label}</span>
-      </div>
-      <span className={`text-sm font-medium ${color || 'text-white'}`}>{value}</span>
-    </div>
+    <View style={styles.detailRow}>
+      <View style={commonStyles.row}>
+        <Ionicons name={icon} size={18} color={colors.neutral500} />
+        <Text style={styles.detailLabel}>{label}</Text>
+      </View>
+      <Text style={[styles.detailValue, valueColor ? { color: valueColor } : {}]}>{value}</Text>
+    </View>
   );
 
   return (
-    <AnimatePresence>
-      {isOpen && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
-          {/* Backdrop */}
-          <motion.div 
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="absolute inset-0 bg-black/80 backdrop-blur-sm"
-            onClick={onClose}
-          />
+    <Modal
+      visible={isOpen}
+      transparent
+      animationType="slide"
+      onRequestClose={onClose}
+    >
+      <View style={styles.overlay}>
+        <TouchableOpacity style={styles.backdrop} onPress={onClose} activeOpacity={1} />
 
-          {/* Modal Sheet */}
-          <motion.div
-            initial={{ y: '100%' }}
-            animate={{ y: 0 }}
-            exit={{ y: '100%' }}
-            transition={{ type: "spring", damping: 25, stiffness: 200 }}
-            className="w-full max-w-md bg-surface-200 rounded-t-3xl sm:rounded-2xl relative z-10 shadow-2xl border-t border-surface-300 max-h-[90vh] overflow-y-auto"
-          >
-            {/* Drag Handle */}
-            <div className="flex justify-center pt-3 pb-2">
-              <div className="w-10 h-1 bg-surface-400 rounded-full" />
-            </div>
+        <MotiView
+          from={{ translateY: 300 }}
+          animate={{ translateY: 0 }}
+          exit={{ translateY: 300 }}
+          transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+          style={styles.sheet}
+        >
+          {/* Drag Handle */}
+          <View style={styles.dragHandle} />
 
-            {/* Header with close button */}
-            <div className="flex justify-end px-4 mb-2">
-              <button 
-                onClick={onClose} 
-                className="p-2 bg-surface-300 rounded-full hover:bg-surface-400 transition-colors"
-              >
-                <X size={20} className="text-neutral-400" />
-              </button>
-            </div>
+          {/* Close Button */}
+          <View style={styles.closeRow}>
+            <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
+              <Ionicons name="close" size={20} color={colors.neutral400} />
+            </TouchableOpacity>
+          </View>
 
-            {/* Delete Confirmation */}
-            <AnimatePresence>
-              {showDeleteConfirm && (
-                <motion.div
-                  initial={{ opacity: 0, y: -10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -10 }}
-                  className="mx-6 mb-4 p-4 bg-danger/10 border border-danger/30 rounded-xl"
-                >
-                  <div className="flex items-start gap-3">
-                    <AlertTriangle className="text-danger shrink-0 mt-0.5" size={20} />
-                    <div className="flex-1">
-                      <h4 className="text-white font-medium mb-1">Delete this transaction?</h4>
-                      <p className="text-neutral-400 text-sm mb-3">This action cannot be undone.</p>
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => setShowDeleteConfirm(false)}
-                          className="flex-1 py-2 bg-surface-300 text-white text-sm font-medium rounded-lg hover:bg-surface-400"
-                        >
-                          Cancel
-                        </button>
-                        <button
-                          onClick={handleDelete}
-                          className="flex-1 py-2 bg-danger text-white text-sm font-medium rounded-lg hover:bg-danger/90"
-                        >
-                          Delete
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-
-            {/* Main Content */}
-            <div className="px-6 pb-6">
-              {/* Merchant Header */}
-              <div className="flex flex-col items-center mb-6">
-                <div 
-                  className="w-20 h-20 rounded-2xl flex items-center justify-center mb-4 shadow-lg overflow-hidden"
-                  style={{ backgroundColor: `${categoryColor}20` }}
-                >
-                  {transaction.merchantLogo ? (
-                    <img 
-                      src={transaction.merchantLogo} 
-                      alt={transaction.merchantName} 
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    <span className="text-4xl">{getCategoryIcon(transaction.category)}</span>
-                  )}
-                </div>
-                <h2 className="text-xl font-semibold text-white mb-1">{transaction.merchantName}</h2>
-                <div 
-                  className="px-3 py-1 rounded-full text-xs font-medium capitalize"
-                  style={{ backgroundColor: `${categoryColor}20`, color: categoryColor }}
-                >
+          <ScrollView showsVerticalScrollIndicator={false}>
+            {/* Merchant Header */}
+            <View style={styles.merchantHeader}>
+              <View style={[styles.merchantIcon, { backgroundColor: `${categoryColor}20` }]}>
+                <Text style={styles.merchantEmoji}>{getCategoryIcon(transaction.category)}</Text>
+              </View>
+              <Text style={styles.merchantName}>{transaction.merchantName}</Text>
+              <View style={[styles.categoryBadge, { backgroundColor: `${categoryColor}20` }]}>
+                <Text style={[styles.categoryBadgeText, { color: categoryColor }]}>
                   {transaction.category.replace('_', ' ')}
-                </div>
-              </div>
+                </Text>
+              </View>
+            </View>
 
-              {/* Amount */}
-              <div className="text-center mb-8">
-                <span className={`text-4xl font-mono font-light ${isExpense ? 'text-white' : 'text-mint'}`}>
-                  {isExpense ? '-' : '+'}{formatCurrency(transaction.amount)}
-                </span>
-                {transaction.status === 'pending' && (
-                  <span className="block text-warning text-xs mt-2 uppercase tracking-wide font-medium">
-                    Pending • May change
-                  </span>
-                )}
-              </div>
+            {/* Amount */}
+            <View style={styles.amountContainer}>
+              <Text style={[styles.amount, !isExpense && { color: colors.mint }]}>
+                {isExpense ? '-' : '+'}{formatCurrency(transaction.amount)}
+              </Text>
+              {transaction.status === 'pending' && (
+                <Text style={styles.pendingText}>PENDING • May change</Text>
+              )}
+            </View>
 
-              {/* Details */}
-              <div className="bg-surface-100 rounded-xl p-4 mb-6">
-                <DetailRow icon={Calendar} label="Date" value={date} />
-                <DetailRow icon={Calendar} label="Time" value={time} />
-                <DetailRow icon={CreditCard} label="Account" value="Chase ****4521" />
-                <DetailRow 
-                  icon={Tag} 
-                  label="Category" 
-                  value={transaction.category.replace('_', ' ')} 
-                  color={categoryColor}
-                />
-                <DetailRow 
-                  icon={Repeat} 
-                  label="Recurring" 
-                  value="No" 
-                />
-                <DetailRow 
-                  icon={MapPin} 
-                  label="Location" 
-                  value="New York, NY" 
-                />
-              </div>
+            {/* Details Card */}
+            <View style={styles.detailsCard}>
+              <DetailRow icon="calendar-outline" label="Date" value={date} />
+              <DetailRow icon="time-outline" label="Time" value={time} />
+              <DetailRow icon="card-outline" label="Account" value="Chase ****4521" />
+              <DetailRow icon="pricetag-outline" label="Category" value={transaction.category.replace('_', ' ')} valueColor={categoryColor} />
+              <DetailRow icon="repeat-outline" label="Recurring" value="No" />
+              <DetailRow icon="location-outline" label="Location" value="New York, NY" />
+            </View>
 
-              {/* Action Buttons */}
-              <div className="grid grid-cols-3 gap-3 mb-4">
-                <button className="flex flex-col items-center gap-2 p-4 bg-surface-300 rounded-xl hover:bg-surface-400 transition-colors">
-                  <Edit2 size={20} className="text-neutral-400" />
-                  <span className="text-xs text-neutral-400">Edit</span>
-                </button>
-                <button className="flex flex-col items-center gap-2 p-4 bg-surface-300 rounded-xl hover:bg-surface-400 transition-colors">
-                  <Share2 size={20} className="text-neutral-400" />
-                  <span className="text-xs text-neutral-400">Share</span>
-                </button>
-                <button 
-                  onClick={() => setShowDeleteConfirm(true)}
-                  className="flex flex-col items-center gap-2 p-4 bg-surface-300 rounded-xl hover:bg-danger/20 transition-colors group"
-                >
-                  <Trash2 size={20} className="text-neutral-400 group-hover:text-danger transition-colors" />
-                  <span className="text-xs text-neutral-400 group-hover:text-danger transition-colors">Delete</span>
-                </button>
-              </div>
+            {/* Action Buttons */}
+            <View style={styles.actionGrid}>
+              <TouchableOpacity style={styles.actionBtn} onPress={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}>
+                <Ionicons name="create-outline" size={20} color={colors.neutral400} />
+                <Text style={styles.actionBtnText}>Edit</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.actionBtn} onPress={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}>
+                <Ionicons name="share-outline" size={20} color={colors.neutral400} />
+                <Text style={styles.actionBtnText}>Share</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.actionBtn, styles.deleteBtn]} onPress={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}>
+                <Ionicons name="trash-outline" size={20} color={colors.danger} />
+                <Text style={[styles.actionBtnText, { color: colors.danger }]}>Delete</Text>
+              </TouchableOpacity>
+            </View>
 
-              {/* Split / Flag as Recurring */}
-              <div className="flex gap-3">
-                <button className="flex-1 py-3 bg-surface-300 text-white text-sm font-medium rounded-xl hover:bg-surface-400 transition-colors">
-                  Split Transaction
-                </button>
-                <button className="flex-1 py-3 bg-mint text-black text-sm font-bold rounded-xl flex items-center justify-center gap-2 hover:bg-mint-hover transition-colors">
-                  <Repeat size={16} />
-                  Mark Recurring
-                </button>
-              </div>
-            </div>
-          </motion.div>
-        </div>
-      )}
-    </AnimatePresence>
+            {/* Bottom Actions */}
+            <View style={styles.bottomActions}>
+              <TouchableOpacity style={styles.secondaryBtn}>
+                <Text style={styles.secondaryBtnText}>Split Transaction</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.primaryBtn}>
+                <Ionicons name="repeat" size={16} color={colors.black} />
+                <Text style={styles.primaryBtnText}>Mark Recurring</Text>
+              </TouchableOpacity>
+            </View>
+          </ScrollView>
+        </MotiView>
+      </View>
+    </Modal>
   );
 };
+
+const styles = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    justifyContent: 'flex-end',
+  },
+  backdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+  },
+  sheet: {
+    backgroundColor: colors.surface200,
+    borderTopLeftRadius: borderRadius['3xl'],
+    borderTopRightRadius: borderRadius['3xl'],
+    maxHeight: '90%',
+    borderTopWidth: 1,
+    borderTopColor: colors.surface300,
+  },
+  dragHandle: {
+    width: 40,
+    height: 4,
+    backgroundColor: colors.surface400,
+    borderRadius: 2,
+    alignSelf: 'center',
+    marginTop: spacing[3],
+    marginBottom: spacing[2],
+  },
+  closeRow: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    paddingHorizontal: spacing[4],
+    marginBottom: spacing[2],
+  },
+  closeBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.surface300,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  merchantHeader: {
+    alignItems: 'center',
+    marginBottom: spacing[6],
+  },
+  merchantIcon: {
+    width: 80,
+    height: 80,
+    borderRadius: borderRadius['2xl'],
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing[4],
+  },
+  merchantEmoji: {
+    fontSize: 40,
+  },
+  merchantName: {
+    fontSize: typography.fontSizes.xl,
+    fontWeight: typography.fontWeights.semibold,
+    color: colors.white,
+    marginBottom: spacing[1],
+  },
+  categoryBadge: {
+    paddingHorizontal: spacing[3],
+    paddingVertical: spacing[1],
+    borderRadius: borderRadius.full,
+  },
+  categoryBadgeText: {
+    fontSize: typography.fontSizes.xs,
+    fontWeight: typography.fontWeights.medium,
+    textTransform: 'capitalize',
+  },
+  amountContainer: {
+    alignItems: 'center',
+    marginBottom: spacing[8],
+  },
+  amount: {
+    fontSize: typography.fontSizes['4xl'],
+    fontFamily: 'monospace',
+    fontWeight: typography.fontWeights.light,
+    color: colors.white,
+  },
+  pendingText: {
+    fontSize: typography.fontSizes.xs,
+    color: colors.warning,
+    textTransform: 'uppercase',
+    letterSpacing: typography.letterSpacing.wide,
+    marginTop: spacing[2],
+  },
+  detailsCard: {
+    backgroundColor: colors.surface100,
+    borderRadius: borderRadius.xl,
+    padding: spacing[4],
+    marginHorizontal: spacing[6],
+    marginBottom: spacing[6],
+  },
+  detailRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: spacing[3],
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(26, 26, 26, 0.5)',
+  },
+  detailLabel: {
+    fontSize: typography.fontSizes.sm,
+    color: colors.neutral400,
+    marginLeft: spacing[3],
+  },
+  detailValue: {
+    fontSize: typography.fontSizes.sm,
+    fontWeight: typography.fontWeights.medium,
+    color: colors.white,
+    textTransform: 'capitalize',
+  },
+  actionGrid: {
+    flexDirection: 'row',
+    gap: spacing[3],
+    marginHorizontal: spacing[6],
+    marginBottom: spacing[4],
+  },
+  actionBtn: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing[2],
+    paddingVertical: spacing[4],
+    backgroundColor: colors.surface300,
+    borderRadius: borderRadius.xl,
+  },
+  deleteBtn: {
+    backgroundColor: 'rgba(255, 59, 92, 0.1)',
+  },
+  actionBtnText: {
+    fontSize: typography.fontSizes.xs,
+    color: colors.neutral400,
+  },
+  bottomActions: {
+    flexDirection: 'row',
+    gap: spacing[3],
+    marginHorizontal: spacing[6],
+    marginBottom: spacing[6],
+  },
+  secondaryBtn: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: spacing[3],
+    backgroundColor: colors.surface300,
+    borderRadius: borderRadius.xl,
+  },
+  secondaryBtnText: {
+    fontSize: typography.fontSizes.sm,
+    fontWeight: typography.fontWeights.medium,
+    color: colors.white,
+  },
+  primaryBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing[2],
+    paddingVertical: spacing[3],
+    backgroundColor: colors.mint,
+    borderRadius: borderRadius.xl,
+  },
+  primaryBtnText: {
+    fontSize: typography.fontSizes.sm,
+    fontWeight: typography.fontWeights.bold,
+    color: colors.black,
+  },
+});
 
 export default TransactionDetail;

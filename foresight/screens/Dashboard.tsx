@@ -1,314 +1,494 @@
-import React, { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
-import { Bell, ArrowUpRight, TrendingUp, Check } from 'lucide-react';
-import { formatCurrency, formatCompactCurrency } from '../utils';
-import { SavingsGoal } from '../types';
-import { useUserStore, useGoalStore, useBillStore, useTransactionStore, useInsightStore } from '../stores';
-import { useToast } from '../components/Toast';
+import React, { useState, useMemo, useCallback } from 'react';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet } from 'react-native';
+import { MotiView } from 'moti';
+import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+import { useApp } from '../context/AppContext';
+import { formatCurrency, formatCompactCurrency, getGreeting, getDaysUntilEndOfMonth } from '../utils';
+import { SavingsGoal, Transaction } from '../types';
+import { colors, spacing, borderRadius, typography, commonStyles } from '../theme';
 import HealthDial from '../components/HealthDial';
 import LiquidGauge from '../components/LiquidGauge';
 import TransactionItem from '../components/TransactionItem';
 import TransactionDetail from '../components/TransactionDetail';
 import AddGoal from '../components/AddGoal';
-import { Transaction } from '../types';
 
 const Dashboard: React.FC = () => {
+  const insets = useSafeAreaInsets();
+  const { transactions, goals, bills, user, addGoal } = useApp();
   const [isAddGoalOpen, setIsAddGoalOpen] = useState(false);
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
 
-  // Store hooks
-  const { user, calculateSafeToSpend, preferences } = useUserStore();
-  const { goals, addGoal } = useGoalStore();
-  const { bills, getUpcomingBills, getTotalDue, togglePaidStatus } = useBillStore();
-  const { transactions, getRecentTransactions } = useTransactionStore();
-  const { getUnreadCount } = useInsightStore();
-  const { showToast } = useToast();
+  // Memoized calculations
+  const totalBills = useMemo(
+    () => bills.reduce((sum, bill) => sum + bill.amount, 0),
+    [bills]
+  );
 
-  const upcomingBills = getUpcomingBills();
-  const totalBillsDue = getTotalDue();
-  const recentTransactions = getRecentTransactions(4);
-  const unreadInsights = getUnreadCount();
+  const recentTransactions = useMemo(
+    () => transactions.slice(0, 4),
+    [transactions]
+  );
 
-  // Recalculate safe-to-spend when bills change
-  useEffect(() => {
-    calculateSafeToSpend(totalBillsDue);
-  }, [totalBillsDue, calculateSafeToSpend]);
+  const daysUntilReset = useMemo(() => getDaysUntilEndOfMonth(), []);
+  const greeting = useMemo(() => getGreeting(), []);
 
-  const handleAddGoal = (newGoal: Omit<SavingsGoal, 'id'>) => {
+  // Callbacks
+  const handleAddGoal = useCallback((newGoal: Omit<SavingsGoal, 'id'>) => {
     addGoal(newGoal);
     setIsAddGoalOpen(false);
-    showToast(`Goal "${newGoal.name}" created!`, 'success');
-  };
-
-  const handleBillClick = (billId: string) => {
-    const bill = bills.find(b => b.id === billId);
-    togglePaidStatus(billId);
-    if (bill) {
-      showToast(
-        bill.isPaid ? `Marked ${bill.name} as unpaid` : `Marked ${bill.name} as paid`,
-        'success'
-      );
-    }
-  };
-
-  // Get greeting based on time of day
-  const getGreeting = () => {
-    const hour = new Date().getHours();
-    if (hour < 12) return 'Good morning';
-    if (hour < 18) return 'Good afternoon';
-    return 'Good evening';
-  };
-
-  // Calculate days until end of month
-  const getDaysUntilEndOfMonth = () => {
-    const now = new Date();
-    const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-    return Math.ceil((endOfMonth.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-  };
-
-  const daysLeft = getDaysUntilEndOfMonth();
+  }, [addGoal]);
 
   return (
-    <div className="pb-24 pt-4 px-4 space-y-8">
-      
-      {/* Header */}
-      <header className="flex justify-between items-center mb-6">
-        <div>
-          <h1 className="text-sm font-medium text-neutral-400">{getGreeting()},</h1>
-          <h2 className="text-2xl font-bold text-white tracking-tight">{user.name}</h2>
-        </div>
-        <div className="relative p-2 bg-surface-200 rounded-full border border-surface-300 hover:bg-surface-300 transition-colors cursor-pointer">
-          <Bell size={20} className="text-white" />
-          {unreadInsights > 0 && (
-            <div className="absolute -top-1 -right-1 w-5 h-5 bg-danger rounded-full border-2 border-black flex items-center justify-center">
-              <span className="text-[10px] font-bold text-white">{unreadInsights}</span>
-            </div>
-          )}
-        </div>
-      </header>
-
-      {/* Safe To Spend (Hero) */}
-      <motion.div 
-        initial={{ scale: 0.95, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        className="bg-surface-200 rounded-3xl p-6 border border-surface-300 relative overflow-hidden group"
+    <View style={[styles.container, { paddingTop: insets.top }]}>
+      <ScrollView 
+        style={styles.scrollView}
+        contentContainerStyle={styles.contentContainer}
+        showsVerticalScrollIndicator={false}
       >
-        <div className="absolute top-0 right-0 w-64 h-64 bg-mint/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 group-hover:bg-mint/10 transition-colors duration-700" />
-        
-        <h3 className="text-xs font-bold text-neutral-500 uppercase tracking-widest mb-2">Safe to Spend</h3>
-        <div className="flex items-baseline gap-2 mb-1">
-          <span className={`text-5xl font-light tracking-tight drop-shadow-[0_0_15px_rgba(0,217,165,0.3)] ${
-            preferences.privacyMode ? 'blur-lg select-none' : ''
-          } ${user.safeToSpend < 500 ? 'text-warning' : 'text-mint'}`}>
-            {preferences.privacyMode ? '$••••' : formatCurrency(user.safeToSpend)}
-          </span>
-        </div>
-        <p className="text-neutral-400 text-sm mb-6">
-          until month end 
-          <span className="text-xs bg-surface-300 px-1.5 py-0.5 rounded text-neutral-300 ml-1">
-            ↻ {daysLeft} days
-          </span>
-        </p>
+        {/* Header */}
+        <View style={styles.header}>
+          <View>
+            <Text style={styles.greeting}>{greeting},</Text>
+            <Text style={styles.userName}>{user.name}</Text>
+          </View>
+          <TouchableOpacity style={styles.notificationBtn}>
+            <Ionicons name="notifications-outline" size={20} color={colors.white} />
+            <View style={styles.notificationDot} />
+          </TouchableOpacity>
+        </View>
 
-        {/* Breakdown */}
-        <div className="flex justify-between items-center pt-4 border-t border-surface-300/50 text-sm">
-          <div className="flex flex-col">
-            <span className="text-neutral-500 text-xs mb-1">Balance</span>
-            <span className={`text-white font-mono ${preferences.privacyMode ? 'blur-sm' : ''}`}>
-              {preferences.privacyMode ? '$••••' : formatCompactCurrency(user.balance)}
-            </span>
-          </div>
-          <span className="text-neutral-600">-</span>
-          <div className="flex flex-col">
-            <span className="text-neutral-500 text-xs mb-1">Bills</span>
-            <span className={`text-white font-mono ${preferences.privacyMode ? 'blur-sm' : ''}`}>
-              {preferences.privacyMode ? '$••••' : formatCompactCurrency(totalBillsDue)}
-            </span>
-          </div>
-          <span className="text-neutral-600">=</span>
-          <div className="flex flex-col">
-            <span className="text-neutral-500 text-xs mb-1">Safe</span>
-            <span className={`text-mint font-mono ${preferences.privacyMode ? 'blur-sm' : ''}`}>
-              {preferences.privacyMode ? '$••••' : formatCompactCurrency(user.safeToSpend)}
-            </span>
-          </div>
-        </div>
-      </motion.div>
+        {/* Safe To Spend Card */}
+        <MotiView
+          from={{ scale: 0.95, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ type: 'timing', duration: 500 }}
+          style={styles.heroCard}
+        >
+          <View style={styles.heroGlow} />
+          <Text style={styles.heroLabel}>SAFE TO SPEND</Text>
+          <Text style={styles.heroAmount}>{formatCurrency(user.safeToSpend)}</Text>
+          <Text style={styles.heroSubtext}>
+            until end of month{' '}
+            <View style={styles.daysChip}>
+              <Text style={styles.daysChipText}>↻ {daysUntilReset} days</Text>
+            </View>
+          </Text>
 
-      {/* Health Dial & Stats */}
-      <div className="grid grid-cols-2 gap-4">
-        {/* Dial Card */}
-        <div className="bg-surface-200 rounded-3xl p-4 border border-surface-300 flex flex-col items-center justify-center min-h-[160px]">
-          <span className="text-xs font-bold text-neutral-500 uppercase tracking-wider mb-2 self-start">Fin Health</span>
-          <HealthDial score={user.financialHealthScore} />
-        </div>
+          {/* Breakdown */}
+          <View style={styles.breakdown}>
+            <View style={styles.breakdownItem}>
+              <Text style={styles.breakdownLabel}>Balance</Text>
+              <Text style={styles.breakdownValue}>{formatCompactCurrency(user.balance)}</Text>
+            </View>
+            <Text style={styles.breakdownDivider}>-</Text>
+            <View style={styles.breakdownItem}>
+              <Text style={styles.breakdownLabel}>Bills</Text>
+              <Text style={styles.breakdownValue}>{formatCompactCurrency(totalBills)}</Text>
+            </View>
+            <Text style={styles.breakdownDivider}>=</Text>
+            <View style={styles.breakdownItem}>
+              <Text style={styles.breakdownLabel}>Safe</Text>
+              <Text style={[styles.breakdownValue, { color: colors.mint }]}>
+                {formatCompactCurrency(user.safeToSpend)}
+              </Text>
+            </View>
+          </View>
+        </MotiView>
 
-        {/* Net Worth Card */}
-        <div className="bg-surface-200 rounded-3xl p-5 border border-surface-300 flex flex-col justify-between">
-          <div className="flex justify-between items-start">
-            <span className="text-xs font-bold text-neutral-500 uppercase tracking-wider">Net Worth</span>
-            <TrendingUp size={16} className="text-mint" />
-          </div>
-          <div>
-            <span className={`text-2xl text-white font-semibold block mb-1 ${preferences.privacyMode ? 'blur-md' : ''}`}>
-              {preferences.privacyMode ? '$••••' : formatCompactCurrency(user.netWorth || 34500)}
-            </span>
-            <span className="text-xs text-mint flex items-center gap-1">
-              <ArrowUpRight size={12} />
-              $1.2k this mo
-            </span>
-          </div>
-        </div>
-      </div>
+        {/* Health Dial & Net Worth */}
+        <View style={styles.statsRow}>
+          <View style={styles.dialCard}>
+            <Text style={styles.sectionLabel}>FIN HEALTH</Text>
+            <HealthDial score={user.financialHealthScore} />
+          </View>
+          <View style={styles.netWorthCard}>
+            <View style={commonStyles.rowBetween}>
+              <Text style={styles.sectionLabel}>NET WORTH</Text>
+              <Ionicons name="trending-up" size={16} color={colors.mint} />
+            </View>
+            <Text style={styles.netWorthAmount}>{formatCompactCurrency(user.netWorth || 0)}</Text>
+            <View style={commonStyles.row}>
+              <Ionicons name="arrow-up" size={12} color={colors.mint} />
+              <Text style={styles.netWorthChange}>+$1.2k this month</Text>
+            </View>
+          </View>
+        </View>
 
-      {/* Upcoming Bills */}
-      <div>
-        <div className="flex justify-between items-center mb-4">
-          <h3 className="text-lg font-semibold text-white">Upcoming Bills</h3>
-          <span className="text-neutral-500 text-sm">
-            {upcomingBills.length} pending
-          </span>
-        </div>
-        <div className="space-y-3">
-          {upcomingBills.length === 0 ? (
-            <div className="text-center py-8 text-neutral-500">
-              <Check size={32} className="mx-auto mb-2 text-mint" />
-              <p>All bills are paid! 🎉</p>
-            </div>
-          ) : (
-            upcomingBills.slice(0, 3).map(bill => (
-              <motion.div 
-                key={bill.id} 
-                className={`flex items-center justify-between p-4 bg-surface-200 rounded-xl border transition-all cursor-pointer ${
-                  bill.isPaid 
-                    ? 'border-mint/30 bg-mint/5' 
-                    : 'border-surface-300 hover:bg-surface-300/50'
-                }`}
-                whileHover={{ scale: 1.01 }}
-                whileTap={{ scale: 0.99 }}
-                onClick={() => handleBillClick(bill.id)}
-              >
-                <div className="flex items-center gap-3">
-                  <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${
-                    bill.isPaid 
-                      ? 'bg-mint border-mint' 
-                      : bill.status === 'danger' 
-                        ? 'border-danger' 
-                        : bill.status === 'warning' 
-                          ? 'border-warning' 
-                          : 'border-surface-400'
-                  }`}>
-                    {bill.isPaid && <Check size={14} className="text-black" />}
-                  </div>
-                  <div className="flex flex-col">
-                    <span className={`font-medium ${bill.isPaid ? 'text-neutral-500 line-through' : 'text-white'}`}>
-                      {bill.name}
-                    </span>
-                    <span className="text-neutral-500 text-xs">
-                      Due {new Date(bill.dueDate).toLocaleDateString(undefined, {month:'short', day:'numeric'})}
-                    </span>
-                  </div>
-                </div>
-                <span className={`font-mono ${bill.isPaid ? 'text-neutral-500' : 'text-white'}`}>
-                  {formatCurrency(bill.amount)}
-                </span>
-              </motion.div>
-            ))
-          )}
-        </div>
-      </div>
+        {/* Upcoming Bills */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Upcoming Bills</Text>
+          {bills.map(bill => (
+            <TouchableOpacity key={bill.id} style={styles.billItem} activeOpacity={0.7}>
+              <View style={commonStyles.row}>
+                <View style={[
+                  styles.billIndicator,
+                  { backgroundColor: bill.status === 'danger' ? colors.danger : 
+                                    bill.status === 'warning' ? colors.warning : colors.mint }
+                ]} />
+                <View>
+                  <Text style={styles.billName}>{bill.name}</Text>
+                  <Text style={styles.billDate}>
+                    Due {new Date(bill.dueDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                  </Text>
+                </View>
+              </View>
+              <Text style={styles.billAmount}>{formatCurrency(bill.amount)}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
 
-      {/* Savings Goals (Horizontal Scroll) */}
-      <div>
-        <div className="flex justify-between items-center mb-4">
-          <h3 className="text-lg font-semibold text-white">Savings Goals</h3>
-          <button 
-            onClick={() => setIsAddGoalOpen(true)}
-            className="text-mint text-sm font-medium hover:text-mint-hover transition-colors"
+        {/* Savings Goals */}
+        <View style={styles.section}>
+          <View style={commonStyles.rowBetween}>
+            <Text style={styles.sectionTitle}>Savings Goals</Text>
+            <TouchableOpacity onPress={() => setIsAddGoalOpen(true)}>
+              <Text style={styles.addButton}>+ Add</Text>
+            </TouchableOpacity>
+          </View>
+          <ScrollView 
+            horizontal 
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.goalsScroll}
           >
-            + Add
-          </button>
-        </div>
-        <div className="flex gap-4 overflow-x-auto no-scrollbar pb-2">
-          {goals.map(goal => {
-            const percentage = (goal.currentAmount / goal.targetAmount) * 100;
-            return (
-              <motion.div 
-                key={goal.id} 
-                className="flex flex-col items-center gap-3 min-w-[100px] cursor-pointer"
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-              >
-                <div className="relative">
-                  <LiquidGauge percentage={percentage} color={goal.color} size={90} />
-                  <span className="absolute -top-3 left-1/2 -translate-x-1/2 text-2xl z-40 bg-surface-200 rounded-full p-1 border border-surface-300 shadow-lg">
-                    {goal.icon}
-                  </span>
-                </div>
-                <div className="text-center">
-                  <span className="text-white text-sm font-medium block">{goal.name}</span>
-                  <span className={`text-neutral-500 text-xs ${preferences.privacyMode ? 'blur-sm' : ''}`}>
-                    {preferences.privacyMode ? '$••••' : formatCompactCurrency(goal.currentAmount)}
-                  </span>
-                </div>
-              </motion.div>
-            )
-          })}
-          
-          {/* Add Goal Card */}
-          <motion.button
-            onClick={() => setIsAddGoalOpen(true)}
-            className="flex flex-col items-center justify-center gap-2 min-w-[100px] h-[150px] bg-surface-300/50 rounded-2xl border-2 border-dashed border-surface-400 hover:border-mint hover:bg-surface-300 transition-all"
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-          >
-            <span className="text-3xl">➕</span>
-            <span className="text-neutral-400 text-xs font-medium">Add Goal</span>
-          </motion.button>
-        </div>
-      </div>
+            {goals.map(goal => {
+              const percentage = (goal.currentAmount / goal.targetAmount) * 100;
+              return (
+                <TouchableOpacity key={goal.id} style={styles.goalCard} activeOpacity={0.8}>
+                  <View style={styles.goalIconContainer}>
+                    <LiquidGauge percentage={percentage} color={goal.color} size={80} />
+                    <View style={styles.goalEmoji}>
+                      <Text style={styles.goalEmojiText}>{goal.icon}</Text>
+                    </View>
+                  </View>
+                  <Text style={styles.goalName}>{goal.name}</Text>
+                  <Text style={styles.goalProgress}>{formatCompactCurrency(goal.currentAmount)}</Text>
+                </TouchableOpacity>
+              );
+            })}
+            <TouchableOpacity 
+              style={styles.addGoalCard}
+              onPress={() => setIsAddGoalOpen(true)}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.addGoalIcon}>➕</Text>
+              <Text style={styles.addGoalText}>Add Goal</Text>
+            </TouchableOpacity>
+          </ScrollView>
+        </View>
 
-      {/* Recent Activity */}
-      <div>
-        <div className="flex justify-between items-center mb-4">
-          <h3 className="text-lg font-semibold text-white">Recent Activity</h3>
-          <span className="text-neutral-500 text-sm hover:text-neutral-300 cursor-pointer transition-colors">
-            View all
-          </span>
-        </div>
-        <div className="bg-surface-200 rounded-2xl border border-surface-300 overflow-hidden">
-          {recentTransactions.length === 0 ? (
-            <div className="text-center py-8 text-neutral-500">
-              <p>No transactions yet</p>
-              <p className="text-xs mt-1">Add your first transaction!</p>
-            </div>
-          ) : (
-            recentTransactions.map(t => (
-              <TransactionItem 
-                key={t.id} 
-                transaction={t} 
-                onClick={() => setSelectedTransaction(t)} 
+        {/* Recent Activity */}
+        <View style={styles.section}>
+          <View style={commonStyles.rowBetween}>
+            <Text style={styles.sectionTitle}>Recent Activity</Text>
+            <Text style={styles.viewAll}>View all</Text>
+          </View>
+          <View style={styles.transactionList}>
+            {recentTransactions.map(t => (
+              <TransactionItem
+                key={t.id}
+                transaction={t}
+                onPress={() => setSelectedTransaction(t)}
               />
-            ))
-          )}
-        </div>
-      </div>
+            ))}
+          </View>
+        </View>
+      </ScrollView>
 
-      {/* Add Goal Modal */}
-      <AddGoal 
+      {/* Modals */}
+      <AddGoal
         isOpen={isAddGoalOpen}
         onClose={() => setIsAddGoalOpen(false)}
         onAdd={handleAddGoal}
       />
-
-      {/* Transaction Detail Modal */}
       <TransactionDetail
         transaction={selectedTransaction}
         isOpen={!!selectedTransaction}
         onClose={() => setSelectedTransaction(null)}
       />
-    </div>
+    </View>
   );
 };
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: colors.black,
+  },
+  scrollView: {
+    flex: 1,
+  },
+  contentContainer: {
+    paddingHorizontal: spacing[4],
+    paddingBottom: spacing[24],
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing[6],
+    marginTop: spacing[4],
+  },
+  greeting: {
+    fontSize: typography.fontSizes.sm,
+    fontWeight: typography.fontWeights.medium,
+    color: colors.neutral400,
+  },
+  userName: {
+    fontSize: typography.fontSizes['2xl'],
+    fontWeight: typography.fontWeights.bold,
+    color: colors.white,
+  },
+  notificationBtn: {
+    width: 40,
+    height: 40,
+    backgroundColor: colors.surface200,
+    borderRadius: borderRadius.full,
+    borderWidth: 1,
+    borderColor: colors.surface300,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  notificationDot: {
+    position: 'absolute',
+    top: 10,
+    right: 12,
+    width: 8,
+    height: 8,
+    backgroundColor: colors.danger,
+    borderRadius: 4,
+    borderWidth: 2,
+    borderColor: colors.black,
+  },
+  heroCard: {
+    backgroundColor: colors.surface200,
+    borderRadius: borderRadius['3xl'],
+    padding: spacing[6],
+    borderWidth: 1,
+    borderColor: colors.surface300,
+    overflow: 'hidden',
+    marginBottom: spacing[4],
+  },
+  heroGlow: {
+    position: 'absolute',
+    top: -100,
+    right: -100,
+    width: 200,
+    height: 200,
+    backgroundColor: colors.mintMuted,
+    borderRadius: 100,
+    opacity: 0.3,
+  },
+  heroLabel: {
+    fontSize: typography.fontSizes.xs,
+    fontWeight: typography.fontWeights.bold,
+    color: colors.neutral500,
+    letterSpacing: typography.letterSpacing.widest,
+    marginBottom: spacing[2],
+  },
+  heroAmount: {
+    fontSize: typography.fontSizes['5xl'],
+    fontWeight: typography.fontWeights.light,
+    color: colors.mint,
+    marginBottom: spacing[1],
+  },
+  heroSubtext: {
+    fontSize: typography.fontSizes.sm,
+    color: colors.neutral400,
+    marginBottom: spacing[6],
+  },
+  daysChip: {
+    backgroundColor: colors.surface300,
+    paddingHorizontal: spacing[1.5],
+    paddingVertical: spacing[0.5],
+    borderRadius: borderRadius.sm,
+  },
+  daysChipText: {
+    fontSize: typography.fontSizes.xs,
+    color: colors.neutral300,
+  },
+  breakdown: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(26, 26, 26, 0.5)',
+    paddingTop: spacing[4],
+  },
+  breakdownItem: {
+    alignItems: 'center',
+  },
+  breakdownLabel: {
+    fontSize: typography.fontSizes.xs,
+    color: colors.neutral500,
+    marginBottom: spacing[1],
+  },
+  breakdownValue: {
+    fontSize: typography.fontSizes.sm,
+    fontFamily: 'monospace',
+    color: colors.white,
+  },
+  breakdownDivider: {
+    color: colors.neutral600,
+    fontSize: typography.fontSizes.lg,
+  },
+  statsRow: {
+    flexDirection: 'row',
+    gap: spacing[4],
+    marginBottom: spacing[8],
+  },
+  dialCard: {
+    flex: 1,
+    backgroundColor: colors.surface200,
+    borderRadius: borderRadius['3xl'],
+    padding: spacing[4],
+    borderWidth: 1,
+    borderColor: colors.surface300,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 160,
+  },
+  netWorthCard: {
+    flex: 1,
+    backgroundColor: colors.surface200,
+    borderRadius: borderRadius['3xl'],
+    padding: spacing[5],
+    borderWidth: 1,
+    borderColor: colors.surface300,
+    justifyContent: 'space-between',
+  },
+  sectionLabel: {
+    fontSize: typography.fontSizes.xs,
+    fontWeight: typography.fontWeights.bold,
+    color: colors.neutral500,
+    letterSpacing: typography.letterSpacing.wider,
+    marginBottom: spacing[2],
+  },
+  netWorthAmount: {
+    fontSize: typography.fontSizes['2xl'],
+    fontWeight: typography.fontWeights.semibold,
+    color: colors.white,
+    marginBottom: spacing[1],
+  },
+  netWorthChange: {
+    fontSize: typography.fontSizes.xs,
+    color: colors.mint,
+    marginLeft: spacing[1],
+  },
+  section: {
+    marginBottom: spacing[8],
+  },
+  sectionTitle: {
+    fontSize: typography.fontSizes.lg,
+    fontWeight: typography.fontWeights.semibold,
+    color: colors.white,
+    marginBottom: spacing[4],
+  },
+  addButton: {
+    fontSize: typography.fontSizes.sm,
+    fontWeight: typography.fontWeights.medium,
+    color: colors.mint,
+  },
+  billItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: colors.surface200,
+    borderRadius: borderRadius.xl,
+    borderWidth: 1,
+    borderColor: colors.surface300,
+    padding: spacing[4],
+    marginBottom: spacing[3],
+  },
+  billIndicator: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginRight: spacing[3],
+  },
+  billName: {
+    fontSize: typography.fontSizes.base,
+    fontWeight: typography.fontWeights.medium,
+    color: colors.white,
+  },
+  billDate: {
+    fontSize: typography.fontSizes.xs,
+    color: colors.neutral500,
+  },
+  billAmount: {
+    fontSize: typography.fontSizes.base,
+    fontFamily: 'monospace',
+    color: colors.white,
+  },
+  goalsScroll: {
+    paddingRight: spacing[4],
+    gap: spacing[4],
+  },
+  goalCard: {
+    alignItems: 'center',
+    width: 100,
+  },
+  goalIconContainer: {
+    position: 'relative',
+    marginBottom: spacing[3],
+  },
+  goalEmoji: {
+    position: 'absolute',
+    top: -12,
+    left: '50%',
+    transform: [{ translateX: -16 }],
+    backgroundColor: colors.surface200,
+    borderRadius: borderRadius.full,
+    padding: spacing[1],
+    borderWidth: 1,
+    borderColor: colors.surface300,
+    zIndex: 10,
+  },
+  goalEmojiText: {
+    fontSize: 20,
+  },
+  goalName: {
+    fontSize: typography.fontSizes.sm,
+    fontWeight: typography.fontWeights.medium,
+    color: colors.white,
+    textAlign: 'center',
+  },
+  goalProgress: {
+    fontSize: typography.fontSizes.xs,
+    color: colors.neutral500,
+  },
+  addGoalCard: {
+    width: 100,
+    height: 150,
+    backgroundColor: 'rgba(26, 26, 26, 0.5)',
+    borderRadius: borderRadius['2xl'],
+    borderWidth: 2,
+    borderStyle: 'dashed',
+    borderColor: colors.surface400,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing[2],
+  },
+  addGoalIcon: {
+    fontSize: 24,
+  },
+  addGoalText: {
+    fontSize: typography.fontSizes.xs,
+    fontWeight: typography.fontWeights.medium,
+    color: colors.neutral400,
+  },
+  viewAll: {
+    fontSize: typography.fontSizes.sm,
+    color: colors.neutral500,
+  },
+  transactionList: {
+    backgroundColor: colors.surface200,
+    borderRadius: borderRadius['2xl'],
+    borderWidth: 1,
+    borderColor: colors.surface300,
+    overflow: 'hidden',
+  },
+});
 
 export default Dashboard;

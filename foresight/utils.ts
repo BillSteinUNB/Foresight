@@ -42,7 +42,7 @@ export const formatDate = (dateString: string): string => {
   }
 };
 
-// Category icon mapping with type safety
+// Category icon mapping
 const CATEGORY_ICONS: Record<BudgetCategory, string> = {
   food_dining: '🍔',
   transportation: '🚕',
@@ -63,7 +63,7 @@ export const getCategoryIcon = (category: BudgetCategory): string => {
   return CATEGORY_ICONS[category] || CATEGORY_ICONS.other;
 };
 
-// Category color mapping with type safety
+// Category color mapping
 const CATEGORY_COLORS: Record<BudgetCategory, string> = {
   food_dining: '#FF6B35',
   transportation: '#4ECDC4',
@@ -116,23 +116,4 @@ export const isValidAmount = (amount: number): boolean => {
  */
 export const clamp = (value: number, min: number, max: number): number => {
   return Math.min(Math.max(value, min), max);
-};
-
-/**
- * Debounce a function
- */
-export const debounce = <T extends (...args: Parameters<T>) => ReturnType<T>>(
-  func: T,
-  wait: number
-): ((...args: Parameters<T>) => void) => {
-  let timeoutId: ReturnType<typeof setTimeout> | null = null;
-  
-  return (...args: Parameters<T>) => {
-    if (timeoutId) {
-      clearTimeout(timeoutId);
-    }
-    timeoutId = setTimeout(() => {
-      func(...args);
-    }, wait);
-  };
 };

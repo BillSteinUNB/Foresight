@@ -1,377 +1,426 @@
-import React, { useState } from 'react';
-import { 
-  User as UserIcon, 
-  Settings, 
-  Shield, 
-  CreditCard, 
-  ChevronRight, 
-  LogOut,
-  Bell,
-  Moon,
-  Download,
-  Smartphone,
-  RefreshCw,
-  Plus,
-  ExternalLink,
-  Check,
-  Eye,
-  EyeOff,
-  RotateCcw
-} from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { useUserStore, useTransactionStore, useGoalStore, useBillStore, useInsightStore } from '../stores';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
+import { MotiView, AnimatePresence } from 'moti';
+import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
+
+import { useApp } from '../context/AppContext';
+import { LINKED_ACCOUNTS } from '../mockData';
 import { formatCurrency } from '../utils';
-import { useToast } from '../components/Toast';
+import { colors, spacing, borderRadius, typography, commonStyles } from '../theme';
 
 interface MenuItemProps {
-  icon: React.ComponentType<{ size?: number; className?: string }>;
+  icon: keyof typeof Ionicons.glyphMap;
   label: string;
   value?: string;
-  color?: string;
-  onClick?: () => void;
+  onPress?: () => void;
 }
 
-const MenuItem: React.FC<MenuItemProps> = ({ icon: Icon, label, value, color = 'text-white', onClick }) => (
-  <div 
-    onClick={onClick}
-    className="flex items-center justify-between p-4 bg-surface-200 border-b border-surface-300 last:border-0 hover:bg-surface-300 transition-colors cursor-pointer group"
-  >
-    <div className="flex items-center gap-4">
-      <Icon size={20} className="text-neutral-400 group-hover:text-white transition-colors" />
-      <span className={`${color} font-medium`}>{label}</span>
-    </div>
-    <div className="flex items-center gap-2">
-      {value && <span className="text-neutral-500 text-sm">{value}</span>}
-      <ChevronRight size={16} className="text-neutral-600" />
-    </div>
-  </div>
+const MenuItem: React.FC<MenuItemProps> = ({ icon, label, value, onPress }) => (
+  <TouchableOpacity onPress={onPress} style={styles.menuItem} activeOpacity={0.7}>
+    <View style={commonStyles.row}>
+      <Ionicons name={icon} size={20} color={colors.neutral400} />
+      <Text style={styles.menuLabel}>{label}</Text>
+    </View>
+    <View style={commonStyles.row}>
+      {value && <Text style={styles.menuValue}>{value}</Text>}
+      <Ionicons name="chevron-forward" size={16} color={colors.neutral600} />
+    </View>
+  </TouchableOpacity>
 );
 
 interface ToggleItemProps {
-  icon: React.ComponentType<{ size?: number; className?: string }>;
+  icon: keyof typeof Ionicons.glyphMap;
   label: string;
   enabled: boolean;
   onToggle: () => void;
 }
 
-const ToggleItem: React.FC<ToggleItemProps> = ({ icon: Icon, label, enabled, onToggle }) => (
-  <div className="flex items-center justify-between p-4 bg-surface-200 border-b border-surface-300 last:border-0">
-    <div className="flex items-center gap-4">
-      <Icon size={20} className="text-neutral-400" />
-      <span className="text-white font-medium">{label}</span>
-    </div>
-    <button 
-      onClick={onToggle}
-      className={`w-12 h-7 rounded-full p-1 transition-colors ${enabled ? 'bg-mint' : 'bg-surface-400'}`}
+const ToggleItem: React.FC<ToggleItemProps> = ({ icon, label, enabled, onToggle }) => (
+  <View style={styles.menuItem}>
+    <View style={commonStyles.row}>
+      <Ionicons name={icon} size={20} color={colors.neutral400} />
+      <Text style={styles.menuLabel}>{label}</Text>
+    </View>
+    <TouchableOpacity
+      onPress={onToggle}
+      style={[styles.toggle, enabled && styles.toggleActive]}
+      activeOpacity={0.8}
     >
-      <motion.div 
-        className="w-5 h-5 bg-white rounded-full shadow-md"
-        animate={{ x: enabled ? 20 : 0 }}
-        transition={{ type: "spring", stiffness: 500, damping: 30 }}
+      <MotiView
+        animate={{ translateX: enabled ? 20 : 0 }}
+        transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+        style={styles.toggleThumb}
       />
-    </button>
-  </div>
+    </TouchableOpacity>
+  </View>
 );
 
 const Profile: React.FC = () => {
+  const insets = useSafeAreaInsets();
+  const { user, preferences, updatePreferences, updateNotificationPreference } = useApp();
   const [isExporting, setIsExporting] = useState(false);
-  const [showResetConfirm, setShowResetConfirm] = useState(false);
-  
-  const { showToast } = useToast();
+  const [exportSuccess, setExportSuccess] = useState(false);
 
-  // Store hooks
-  const { 
-    user, 
-    preferences, 
-    linkedAccounts,
-    toggleAiInsights,
-    toggleBiometric,
-    togglePrivacyMode,
-    toggleNotification,
-    setTheme,
-    resetToDefault: resetUser
-  } = useUserStore();
-
-  const { transactions, resetToDefault: resetTransactions } = useTransactionStore();
-  const { goals, resetToDefault: resetGoals } = useGoalStore();
-  const { bills, resetToDefault: resetBills } = useBillStore();
-  const { insights, resetToDefault: resetInsights } = useInsightStore();
-
-  const handleExportData = () => {
+  const handleExportData = useCallback(() => {
     setIsExporting(true);
-    
-    // Prepare export data
-    const exportData = {
-      exportDate: new Date().toISOString(),
-      user: { name: user.name, memberSince: user.memberSince },
-      transactions,
-      goals,
-      bills,
-      insights,
-      preferences
-    };
-    
-    // Simulate export and trigger download
     setTimeout(() => {
-      const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `foresight-export-${new Date().toISOString().split('T')[0]}.json`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-      
       setIsExporting(false);
-      showToast('Data exported successfully!', 'success');
-    }, 1500);
-  };
-
-  const handleResetAllData = () => {
-    resetUser();
-    resetTransactions();
-    resetGoals();
-    resetBills();
-    resetInsights();
-    setShowResetConfirm(false);
-    showToast('All data has been reset to defaults', 'success');
-  };
-
-  const getAccountTypeLabel = (type: string) => {
-    const labels: Record<string, string> = {
-      checking: 'Checking',
-      savings: 'Savings',
-      credit: 'Credit Card',
-      investment: 'Investment'
-    };
-    return labels[type] || type;
-  };
+      setExportSuccess(true);
+      setTimeout(() => setExportSuccess(false), 3000);
+    }, 2000);
+  }, []);
 
   return (
-    <div className="pb-24 pt-4 px-4">
-      {/* Profile Header */}
-      <div className="flex items-center gap-4 mb-8">
-        <div className="w-20 h-20 bg-gradient-to-tr from-mint to-blue-500 rounded-full flex items-center justify-center text-3xl font-bold text-black border-4 border-surface-200 shadow-lg shadow-mint/20">
-          {user.name.charAt(0)}
-        </div>
-        <div>
-          <h1 className="text-2xl font-bold text-white">{user.name} Johnson</h1>
-          <p className="text-neutral-500">Member since {user.memberSince}</p>
-        </div>
-      </div>
+    <View style={[styles.container, { paddingTop: insets.top }]}>
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.contentContainer}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Profile Header */}
+        <View style={styles.profileHeader}>
+          <LinearGradient
+            colors={[colors.mint, colors.blue400]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.avatar}
+          >
+            <Text style={styles.avatarText}>{user.name.charAt(0)}</Text>
+          </LinearGradient>
+          <View>
+            <Text style={styles.profileName}>{user.name} Johnson</Text>
+            <Text style={styles.profileMember}>Member since {user.memberSince}</Text>
+          </View>
+        </View>
 
-      <div className="space-y-6">
-        {/* Linked Accounts Section */}
-        <section>
-          <h3 className="text-xs font-bold text-neutral-500 uppercase tracking-wider mb-3 px-2">
-            Linked Accounts ({linkedAccounts.length})
-          </h3>
-          <div className="bg-surface-200 rounded-2xl border border-surface-300 overflow-hidden">
-            {linkedAccounts.map((account, index) => (
-              <div 
-                key={account.id} 
-                className={`flex items-center justify-between p-4 ${index !== linkedAccounts.length - 1 ? 'border-b border-surface-300' : ''}`}
+        {/* Linked Accounts */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>LINKED ACCOUNTS</Text>
+          <View style={styles.card}>
+            {LINKED_ACCOUNTS.map((account, index) => (
+              <View
+                key={account.id}
+                style={[styles.accountItem, index !== LINKED_ACCOUNTS.length - 1 && styles.borderBottom]}
               >
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center overflow-hidden">
-                    {account.logoUrl ? (
-                      <img src={account.logoUrl} alt={account.institutionName} className="w-6 h-6 object-contain" />
-                    ) : (
-                      <CreditCard size={20} className="text-neutral-600" />
-                    )}
-                  </div>
-                  <div className="flex flex-col">
-                    <span className="text-white font-medium">{account.institutionName}</span>
-                    <span className="text-neutral-500 text-xs">
-                      {getAccountTypeLabel(account.accountType)} ••••{account.lastFour}
-                    </span>
-                  </div>
-                </div>
-                <div className="flex flex-col items-end">
-                  <span className={`font-mono font-medium ${preferences.privacyMode ? 'blur-sm' : ''} ${account.balance < 0 ? 'text-danger' : 'text-white'}`}>
-                    {preferences.privacyMode ? '$••••' : formatCurrency(account.balance)}
-                  </span>
-                  <div className="flex items-center gap-1 text-neutral-500">
-                    <RefreshCw size={10} />
-                    <span className="text-[10px]">Just now</span>
-                  </div>
-                </div>
-              </div>
+                <View style={commonStyles.row}>
+                  <View style={styles.accountLogo}>
+                    <Ionicons name="card" size={20} color={colors.neutral600} />
+                  </View>
+                  <View>
+                    <Text style={styles.accountName}>{account.institutionName}</Text>
+                    <Text style={styles.accountType}>
+                      {account.accountType} ••••{account.lastFour}
+                    </Text>
+                  </View>
+                </View>
+                <View style={styles.accountBalance}>
+                  <Text style={[styles.balanceAmount, account.balance < 0 && { color: colors.danger }]}>
+                    {formatCurrency(account.balance)}
+                  </Text>
+                  <View style={commonStyles.row}>
+                    <Ionicons name="refresh" size={10} color={colors.neutral500} />
+                    <Text style={styles.syncText}>Just now</Text>
+                  </View>
+                </View>
+              </View>
             ))}
-            
-            {/* Add Account Button */}
-            <button className="w-full p-4 flex items-center justify-center gap-2 text-mint font-medium hover:bg-surface-300 transition-colors border-t border-surface-300">
-              <Plus size={18} />
-              <span>Link New Account</span>
-            </button>
-          </div>
-        </section>
+            <TouchableOpacity style={styles.addAccountBtn} activeOpacity={0.7}>
+              <Ionicons name="add" size={18} color={colors.mint} />
+              <Text style={styles.addAccountText}>Link New Account</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
 
         {/* Account Section */}
-        <section>
-          <h3 className="text-xs font-bold text-neutral-500 uppercase tracking-wider mb-3 px-2">Account</h3>
-          <div className="bg-surface-200 rounded-2xl border border-surface-300 overflow-hidden">
-            <MenuItem icon={UserIcon} label="Personal Info" />
-            <MenuItem icon={Shield} label="Privacy & Security" />
-          </div>
-        </section>
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>ACCOUNT</Text>
+          <View style={styles.card}>
+            <MenuItem icon="person-outline" label="Personal Info" />
+            <MenuItem icon="shield-outline" label="Privacy & Security" />
+          </View>
+        </View>
 
-        {/* Preferences Section */}
-        <section>
-          <h3 className="text-xs font-bold text-neutral-500 uppercase tracking-wider mb-3 px-2">Preferences</h3>
-          <div className="bg-surface-200 rounded-2xl border border-surface-300 overflow-hidden">
-            <MenuItem icon={Settings} label="General Settings" value={preferences.currency} />
-            <ToggleItem 
-              icon={Moon} 
-              label="Dark Mode" 
-              enabled={preferences.theme === 'dark'} 
-              onToggle={() => setTheme(preferences.theme === 'dark' ? 'light' : 'dark')}
+        {/* Preferences */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>PREFERENCES</Text>
+          <View style={styles.card}>
+            <MenuItem icon="settings-outline" label="General Settings" value={preferences.currency} />
+            <ToggleItem
+              icon="moon-outline"
+              label="Dark Mode"
+              enabled={preferences.theme === 'dark'}
+              onToggle={() => updatePreferences({ theme: preferences.theme === 'dark' ? 'light' : 'dark' })}
             />
-            <ToggleItem 
-              icon={Smartphone} 
-              label="Biometric Login" 
-              enabled={preferences.biometricEnabled} 
-              onToggle={toggleBiometric}
+            <ToggleItem
+              icon="finger-print-outline"
+              label="Biometric Login"
+              enabled={preferences.biometricEnabled}
+              onToggle={() => updatePreferences({ biometricEnabled: !preferences.biometricEnabled })}
             />
-            <ToggleItem 
-              icon={preferences.privacyMode ? EyeOff : Eye} 
-              label="Privacy Mode" 
-              enabled={preferences.privacyMode} 
-              onToggle={togglePrivacyMode}
-            />
-          </div>
-        </section>
+          </View>
+        </View>
 
-        {/* Notifications Section */}
-        <section>
-          <h3 className="text-xs font-bold text-neutral-500 uppercase tracking-wider mb-3 px-2">Notifications</h3>
-          <div className="bg-surface-200 rounded-2xl border border-surface-300 overflow-hidden">
-            <ToggleItem 
-              icon={Bell} 
-              label="Push Notifications" 
-              enabled={preferences.notifications.pushEnabled} 
-              onToggle={() => toggleNotification('pushEnabled')}
+        {/* Notifications */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>NOTIFICATIONS</Text>
+          <View style={styles.card}>
+            <ToggleItem
+              icon="notifications-outline"
+              label="Push Notifications"
+              enabled={preferences.notifications.pushEnabled}
+              onToggle={() => updateNotificationPreference('pushEnabled', !preferences.notifications.pushEnabled)}
             />
-            <ToggleItem 
-              icon={Bell} 
-              label="Bill Reminders" 
-              enabled={preferences.notifications.billReminders} 
-              onToggle={() => toggleNotification('billReminders')}
+            <ToggleItem
+              icon="alarm-outline"
+              label="Bill Reminders"
+              enabled={preferences.notifications.billReminders}
+              onToggle={() => updateNotificationPreference('billReminders', !preferences.notifications.billReminders)}
             />
-            <ToggleItem 
-              icon={Bell} 
-              label="Spending Alerts" 
-              enabled={preferences.notifications.spendingAlerts} 
-              onToggle={() => toggleNotification('spendingAlerts')}
+            <ToggleItem
+              icon="trending-up-outline"
+              label="Spending Alerts"
+              enabled={preferences.notifications.spendingAlerts}
+              onToggle={() => updateNotificationPreference('spendingAlerts', !preferences.notifications.spendingAlerts)}
             />
-          </div>
-        </section>
+          </View>
+        </View>
 
-        {/* AI Features Section */}
-        <section>
-          <h3 className="text-xs font-bold text-neutral-500 uppercase tracking-wider mb-3 px-2">AI Features</h3>
-          <div className="bg-surface-200 rounded-2xl border border-surface-300 overflow-hidden">
-            <ToggleItem 
-              icon={() => <span className="text-lg">🤖</span>} 
-              label="AI Insights" 
-              enabled={preferences.aiInsightsEnabled} 
-              onToggle={toggleAiInsights}
+        {/* AI Features */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>AI FEATURES</Text>
+          <View style={styles.card}>
+            <ToggleItem
+              icon="sparkles-outline"
+              label="AI Insights"
+              enabled={preferences.aiInsightsEnabled}
+              onToggle={() => updatePreferences({ aiInsightsEnabled: !preferences.aiInsightsEnabled })}
             />
-          </div>
-        </section>
+          </View>
+        </View>
 
-        {/* Data Section */}
-        <section>
-          <h3 className="text-xs font-bold text-neutral-500 uppercase tracking-wider mb-3 px-2">Data</h3>
-          <div className="bg-surface-200 rounded-2xl border border-surface-300 overflow-hidden">
-            <button 
-              onClick={handleExportData}
+        {/* Data */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>DATA</Text>
+          <View style={styles.card}>
+            <TouchableOpacity
+              onPress={handleExportData}
               disabled={isExporting}
-              className="w-full flex items-center justify-between p-4 hover:bg-surface-300 transition-colors disabled:opacity-50"
+              style={[styles.menuItem, styles.borderBottom]}
+              activeOpacity={0.7}
             >
-              <div className="flex items-center gap-4">
-                <Download size={20} className="text-neutral-400" />
-                <span className="text-white font-medium">Export All Data</span>
-              </div>
-              <div className="flex items-center gap-2">
+              <View style={commonStyles.row}>
+                <Ionicons name="download-outline" size={20} color={colors.neutral400} />
+                <Text style={styles.menuLabel}>Export All Data</Text>
+              </View>
+              <AnimatePresence>
                 {isExporting ? (
-                  <RefreshCw size={16} className="text-mint animate-spin" />
+                  <ActivityIndicator size="small" color={colors.mint} />
+                ) : exportSuccess ? (
+                  <MotiView
+                    from={{ opacity: 0, scale: 0.5 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    style={commonStyles.row}
+                  >
+                    <Ionicons name="checkmark" size={16} color={colors.mint} />
+                    <Text style={styles.successText}>Downloaded</Text>
+                  </MotiView>
                 ) : (
-                  <span className="text-neutral-500 text-sm">JSON</span>
+                  <Text style={styles.menuValue}>CSV, JSON</Text>
                 )}
-              </div>
-            </button>
-            
-            <button 
-              onClick={() => setShowResetConfirm(true)}
-              className="w-full flex items-center justify-between p-4 hover:bg-surface-300 transition-colors border-t border-surface-300"
-            >
-              <div className="flex items-center gap-4">
-                <RotateCcw size={20} className="text-neutral-400" />
-                <span className="text-white font-medium">Reset to Demo Data</span>
-              </div>
-              <ChevronRight size={16} className="text-neutral-600" />
-            </button>
-          </div>
-        </section>
+              </AnimatePresence>
+            </TouchableOpacity>
+            <MenuItem icon="open-outline" label="Request Full Data Export" />
+          </View>
+        </View>
 
         {/* Sign Out */}
-        <button className="w-full py-4 text-danger font-medium flex items-center justify-center gap-2 hover:bg-danger/10 rounded-xl transition-colors">
-          <LogOut size={18} />
-          Sign Out
-        </button>
+        <TouchableOpacity style={styles.signOutBtn} activeOpacity={0.7}>
+          <Ionicons name="log-out-outline" size={18} color={colors.danger} />
+          <Text style={styles.signOutText}>Sign Out</Text>
+        </TouchableOpacity>
 
-        <p className="text-center text-neutral-600 text-xs mt-4">
-          Foresight v2.1.0 (Build 2025)
-          <br />
-          <span className="text-neutral-700">
-            {transactions.length} transactions • {goals.length} goals • {bills.length} bills
-          </span>
-        </p>
-      </div>
-
-      {/* Reset Confirmation Modal */}
-      <AnimatePresence>
-        {showResetConfirm && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <motion.div 
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="absolute inset-0 bg-black/80 backdrop-blur-sm"
-              onClick={() => setShowResetConfirm(false)}
-            />
-            <motion.div
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
-              className="bg-surface-200 rounded-2xl p-6 max-w-sm w-full relative z-10 border border-surface-300"
-            >
-              <h3 className="text-xl font-semibold text-white mb-2">Reset All Data?</h3>
-              <p className="text-neutral-400 text-sm mb-6">
-                This will reset all transactions, goals, bills, and settings back to the demo data. This cannot be undone.
-              </p>
-              <div className="flex gap-3">
-                <button
-                  onClick={() => setShowResetConfirm(false)}
-                  className="flex-1 py-3 bg-surface-300 text-white font-medium rounded-xl hover:bg-surface-400"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleResetAllData}
-                  className="flex-1 py-3 bg-danger text-white font-medium rounded-xl hover:bg-danger/90"
-                >
-                  Reset Data
-                </button>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-    </div>
+        <Text style={styles.version}>Foresight v2.1.0 (Build 2025)</Text>
+      </ScrollView>
+    </View>
   );
 };
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: colors.black,
+  },
+  scrollView: {
+    flex: 1,
+  },
+  contentContainer: {
+    paddingHorizontal: spacing[4],
+    paddingBottom: spacing[24],
+  },
+  profileHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[4],
+    marginTop: spacing[4],
+    marginBottom: spacing[8],
+  },
+  avatar: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 4,
+    borderColor: colors.surface200,
+  },
+  avatarText: {
+    fontSize: 30,
+    fontWeight: typography.fontWeights.bold,
+    color: colors.black,
+  },
+  profileName: {
+    fontSize: typography.fontSizes['2xl'],
+    fontWeight: typography.fontWeights.bold,
+    color: colors.white,
+  },
+  profileMember: {
+    fontSize: typography.fontSizes.sm,
+    color: colors.neutral500,
+  },
+  section: {
+    marginBottom: spacing[6],
+  },
+  sectionTitle: {
+    fontSize: typography.fontSizes.xs,
+    fontWeight: typography.fontWeights.bold,
+    color: colors.neutral500,
+    letterSpacing: typography.letterSpacing.wider,
+    marginBottom: spacing[3],
+    paddingHorizontal: spacing[2],
+  },
+  card: {
+    backgroundColor: colors.surface200,
+    borderRadius: borderRadius['2xl'],
+    borderWidth: 1,
+    borderColor: colors.surface300,
+    overflow: 'hidden',
+  },
+  menuItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: spacing[4],
+  },
+  borderBottom: {
+    borderBottomWidth: 1,
+    borderBottomColor: colors.surface300,
+  },
+  menuLabel: {
+    fontSize: typography.fontSizes.base,
+    fontWeight: typography.fontWeights.medium,
+    color: colors.white,
+    marginLeft: spacing[4],
+  },
+  menuValue: {
+    fontSize: typography.fontSizes.sm,
+    color: colors.neutral500,
+    marginRight: spacing[2],
+  },
+  toggle: {
+    width: 48,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: colors.surface400,
+    padding: 4,
+  },
+  toggleActive: {
+    backgroundColor: colors.mint,
+  },
+  toggleThumb: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: colors.white,
+  },
+  accountItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: spacing[4],
+  },
+  accountLogo: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.white,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: spacing[3],
+  },
+  accountName: {
+    fontSize: typography.fontSizes.base,
+    fontWeight: typography.fontWeights.medium,
+    color: colors.white,
+  },
+  accountType: {
+    fontSize: typography.fontSizes.xs,
+    color: colors.neutral500,
+    textTransform: 'capitalize',
+  },
+  accountBalance: {
+    alignItems: 'flex-end',
+  },
+  balanceAmount: {
+    fontSize: typography.fontSizes.base,
+    fontFamily: 'monospace',
+    fontWeight: typography.fontWeights.medium,
+    color: colors.white,
+  },
+  syncText: {
+    fontSize: 10,
+    color: colors.neutral500,
+    marginLeft: spacing[1],
+  },
+  addAccountBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing[2],
+    padding: spacing[4],
+    borderTopWidth: 1,
+    borderTopColor: colors.surface300,
+  },
+  addAccountText: {
+    fontSize: typography.fontSizes.base,
+    fontWeight: typography.fontWeights.medium,
+    color: colors.mint,
+  },
+  successText: {
+    fontSize: typography.fontSizes.sm,
+    color: colors.mint,
+    marginLeft: spacing[1],
+  },
+  signOutBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing[2],
+    paddingVertical: spacing[4],
+    marginTop: spacing[2],
+  },
+  signOutText: {
+    fontSize: typography.fontSizes.base,
+    fontWeight: typography.fontWeights.medium,
+    color: colors.danger,
+  },
+  version: {
+    fontSize: typography.fontSizes.xs,
+    color: colors.neutral600,
+    textAlign: 'center',
+    marginTop: spacing[4],
+  },
+});
 
 export default Profile;

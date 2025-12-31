@@ -1,28 +1,31 @@
-import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Lightbulb, TrendingUp, AlertTriangle, ArrowRight, Clock, Check, X } from 'lucide-react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
+import { MotiView, AnimatePresence } from 'moti';
+import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+import { useApp } from '../context/AppContext';
 import { formatCurrency } from '../utils';
 import { Insight } from '../types';
-import { useInsightStore } from '../stores';
-import { useToast } from '../components/Toast';
-import { InsightCardSkeleton } from '../components/Skeleton';
+import { colors, spacing, borderRadius, typography, commonStyles } from '../theme';
 
-const InsightIcon = ({ type }: { type: string }) => {
-    switch (type) {
-        case 'alert': return <AlertTriangle className="text-warning" size={24} />;
-        case 'positive': return <TrendingUp className="text-mint" size={24} />;
-        case 'prediction': return <Clock className="text-blue-400" size={24} />;
-        default: return <Lightbulb className="text-purple-400" size={24} />;
-    }
+const LOADING_DELAY_MS = 1200;
+
+const getInsightIcon = (type: string): keyof typeof Ionicons.glyphMap => {
+  switch (type) {
+    case 'alert': return 'warning';
+    case 'positive': return 'trending-up';
+    case 'prediction': return 'time';
+    default: return 'bulb';
+  }
 };
 
-const getInsightGradient = (type: string) => {
+const getInsightColor = (type: string): string => {
   switch (type) {
-    case 'alert': return 'from-warning/20 to-transparent';
-    case 'positive': return 'from-mint/20 to-transparent';
-    case 'prediction': return 'from-blue-500/20 to-transparent';
-    case 'subscription': return 'from-purple-500/20 to-transparent';
-    default: return 'from-surface-300/50 to-transparent';
+    case 'alert': return colors.warning;
+    case 'positive': return colors.mint;
+    case 'prediction': return colors.blue400;
+    default: return colors.purple400;
   }
 };
 
@@ -35,192 +38,377 @@ interface InsightCardProps {
 const InsightCard: React.FC<InsightCardProps> = ({ insight, onDismiss, onAction }) => {
   const [isActioning, setIsActioning] = useState(false);
   const [isDismissing, setIsDismissing] = useState(false);
+  const color = getInsightColor(insight.type);
 
-  const handleAction = () => {
+  const handleAction = useCallback(() => {
     setIsActioning(true);
     setTimeout(() => {
       onAction(insight.id);
       setIsActioning(false);
     }, 1000);
-  };
+  }, [insight.id, onAction]);
 
-  const handleDismiss = () => {
+  const handleDismiss = useCallback(() => {
     setIsDismissing(true);
-    setTimeout(() => {
-      onDismiss(insight.id);
-    }, 300);
-  };
+    setTimeout(() => onDismiss(insight.id), 300);
+  }, [insight.id, onDismiss]);
 
   return (
-    <motion.div 
-      layout
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: isDismissing ? 0 : 1, y: 0, scale: isDismissing ? 0.95 : 1 }}
-      exit={{ opacity: 0, scale: 0.95, y: -10 }}
-      transition={{ duration: 0.3 }}
-      className="bg-surface-200 rounded-3xl p-6 border border-surface-300 relative overflow-hidden"
+    <MotiView
+      from={{ opacity: 0, translateY: 20 }}
+      animate={{ opacity: isDismissing ? 0 : 1, translateY: 0, scale: isDismissing ? 0.95 : 1 }}
+      exit={{ opacity: 0, scale: 0.95 }}
+      transition={{ type: 'timing', duration: 300 }}
+      style={styles.insightCard}
     >
-      {/* Decorative Background Gradient */}
-      <div className={`absolute top-0 right-0 w-48 h-48 bg-gradient-to-bl ${getInsightGradient(insight.type)} rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none`} />
+      <View style={[styles.insightGlow, { backgroundColor: color }]} />
+      
+      <View style={styles.insightHeader}>
+        <View style={[styles.insightIconContainer, { backgroundColor: `${color}20` }]}>
+          <Ionicons name={getInsightIcon(insight.type)} size={24} color={color} />
+        </View>
+        <View style={styles.insightContent}>
+          <View style={commonStyles.rowBetween}>
+            <Text style={styles.insightTitle} numberOfLines={2}>{insight.title}</Text>
+            {!insight.isRead && <View style={styles.unreadDot} />}
+          </View>
+          <Text style={styles.insightDescription}>{insight.description}</Text>
+        </View>
+      </View>
 
-      <div className="flex items-start gap-4 mb-4 relative z-10">
-        <div className="p-3 bg-surface-300 rounded-xl shrink-0">
-          <InsightIcon type={insight.type} />
-        </div>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-start justify-between gap-2">
-            <h3 className="text-lg font-semibold text-white mb-1 leading-snug">{insight.title}</h3>
-            {!insight.isRead && (
-              <span className="shrink-0 w-2 h-2 bg-mint rounded-full mt-2" />
-            )}
-          </div>
-          <p className="text-neutral-400 text-sm leading-relaxed">{insight.description}</p>
-        </div>
-      </div>
-
-      {/* Data Viz / Context */}
       {insight.data && (
-        <div className="bg-surface-300/50 rounded-xl p-4 mb-4 relative z-10">
+        <View style={styles.insightData}>
           {insight.data.saved && (
-            <div className="text-center">
-              <span className="text-neutral-500 text-xs uppercase tracking-wide block mb-1">Potential Savings</span>
-              <span className="text-3xl font-light text-white">{formatCurrency(insight.data.saved)}<span className="text-lg text-neutral-400">/yr</span></span>
-            </div>
+            <View style={styles.savingsDisplay}>
+              <Text style={styles.savingsLabel}>Potential Savings</Text>
+              <Text style={styles.savingsAmount}>
+                {formatCurrency(insight.data.saved)}
+                <Text style={styles.savingsPeriod}>/yr</Text>
+              </Text>
+            </View>
           )}
           {insight.data.amount && !insight.data.saved && (
-            <div className="w-full">
-              <div className="flex justify-between text-xs text-neutral-400 mb-2">
-                <span>This month</span>
-                <span className="font-mono">{formatCurrency(insight.data.amount)}</span>
-              </div>
-              <div className="w-full h-3 bg-surface-400 rounded-full overflow-hidden">
-                <motion.div 
-                  className="h-full bg-gradient-to-r from-warning to-danger"
-                  initial={{ width: 0 }}
+            <View style={styles.progressContainer}>
+              <View style={commonStyles.rowBetween}>
+                <Text style={styles.progressLabel}>This month</Text>
+                <Text style={styles.progressValue}>{formatCurrency(insight.data.amount)}</Text>
+              </View>
+              <View style={styles.progressBar}>
+                <MotiView
+                  from={{ width: '0%' }}
                   animate={{ width: '75%' }}
-                  transition={{ duration: 1, ease: 'easeOut' }}
+                  transition={{ type: 'timing', duration: 1000 }}
+                  style={styles.progressFill}
                 />
-              </div>
-              <div className="flex justify-between text-xs text-neutral-500 mt-2">
-                <span>Your average</span>
-                <span className="font-mono">$300.00</span>
-              </div>
-            </div>
+              </View>
+              <View style={commonStyles.rowBetween}>
+                <Text style={styles.progressLabel}>Your average</Text>
+                <Text style={styles.progressValue}>$300.00</Text>
+              </View>
+            </View>
           )}
-        </div>
+        </View>
       )}
 
-      {/* Actions */}
-      <div className="flex gap-3 relative z-10">
-        <button 
-          onClick={handleDismiss}
+      <View style={styles.insightActions}>
+        <TouchableOpacity
+          onPress={handleDismiss}
           disabled={isDismissing}
-          className="flex-1 py-2.5 bg-surface-300 text-white text-sm font-medium rounded-xl hover:bg-surface-400 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+          style={styles.dismissButton}
+          activeOpacity={0.7}
         >
-          <X size={16} />
-          Dismiss
-        </button>
-        <button 
-          onClick={handleAction}
+          <Ionicons name="close" size={16} color={colors.white} />
+          <Text style={styles.dismissButtonText}>Dismiss</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          onPress={handleAction}
           disabled={isActioning}
-          className="flex-1 py-2.5 bg-white text-black text-sm font-bold rounded-xl flex items-center justify-center gap-2 hover:bg-neutral-200 transition-colors disabled:opacity-70"
+          style={styles.actionButton}
+          activeOpacity={0.7}
         >
           {isActioning ? (
-            <>
-              <motion.div 
-                animate={{ rotate: 360 }}
-                transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-              >
-                <Check size={16} />
-              </motion.div>
-              <span>Processing...</span>
-            </>
+            <ActivityIndicator size="small" color={colors.black} />
           ) : (
             <>
-              <span>Take Action</span>
-              <ArrowRight size={14} />
+              <Text style={styles.actionButtonText}>Take Action</Text>
+              <Ionicons name="arrow-forward" size={14} color={colors.black} />
             </>
           )}
-        </button>
-      </div>
-    </motion.div>
+        </TouchableOpacity>
+      </View>
+    </MotiView>
   );
 };
 
 const Insights: React.FC = () => {
+  const insets = useSafeAreaInsets();
+  const { insights, dismissInsight, markInsightRead } = useApp();
   const [isLoading, setIsLoading] = useState(true);
-  const { insights, dismissInsight, markAsRead, getUnreadCount } = useInsightStore();
-  const { showToast } = useToast();
 
-  // Simulate loading
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setIsLoading(false);
-    }, 800);
+    const timer = setTimeout(() => setIsLoading(false), LOADING_DELAY_MS);
     return () => clearTimeout(timer);
   }, []);
 
-  const handleDismiss = (id: string) => {
-    dismissInsight(id);
-    showToast('Insight dismissed', 'info');
-  };
-
-  const handleAction = (id: string) => {
-    markAsRead(id);
-    showToast('Action taken!', 'success');
-  };
-
-  const unreadCount = getUnreadCount();
+  const unreadCount = insights.filter(i => !i.isRead).length;
 
   return (
-    <div className="pb-24 pt-4 px-4">
-      <div className="flex items-start justify-between mb-2">
-        <h1 className="text-2xl font-bold text-white">Insights</h1>
-        {unreadCount > 0 && (
-          <span className="px-2.5 py-1 bg-mint/20 text-mint text-xs font-bold rounded-full">
-            {unreadCount} new
-          </span>
-        )}
-      </div>
-      <p className="text-neutral-400 mb-8">AI-powered suggestions for your wallet.</p>
+    <View style={[styles.container, { paddingTop: insets.top }]}>
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.contentContainer}
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.header}>
+          <Text style={styles.title}>Insights</Text>
+          {unreadCount > 0 && (
+            <View style={styles.badge}>
+              <Text style={styles.badgeText}>{unreadCount} new</Text>
+            </View>
+          )}
+        </View>
+        <Text style={styles.subtitle}>AI-powered suggestions for your wallet.</Text>
 
-      <div className="space-y-6">
-        <AnimatePresence mode="popLayout">
+        <AnimatePresence>
           {isLoading ? (
-            // Loading skeletons
-            <>
-              <InsightCardSkeleton />
-              <InsightCardSkeleton />
-              <InsightCardSkeleton />
-            </>
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color={colors.mint} />
+              <Text style={styles.loadingText}>Analyzing your finances...</Text>
+            </View>
           ) : insights.length === 0 ? (
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="flex flex-col items-center justify-center py-16 text-center"
+            <MotiView
+              from={{ opacity: 0, translateY: 20 }}
+              animate={{ opacity: 1, translateY: 0 }}
+              style={styles.emptyState}
             >
-              <div className="w-20 h-20 bg-surface-200 rounded-full flex items-center justify-center mb-4 text-4xl border border-surface-300">
-                ✨
-              </div>
-              <h3 className="text-white font-semibold text-lg mb-2">All caught up!</h3>
-              <p className="text-neutral-500 text-sm max-w-[260px]">
-                You've reviewed all your insights. Check back later for new AI-powered suggestions.
-              </p>
-            </motion.div>
+              <Text style={styles.emptyIcon}>✨</Text>
+              <Text style={styles.emptyTitle}>All caught up!</Text>
+              <Text style={styles.emptyText}>
+                You've reviewed all your insights. Check back later for new suggestions.
+              </Text>
+            </MotiView>
           ) : (
             insights.map(insight => (
-              <InsightCard 
+              <InsightCard
                 key={insight.id}
                 insight={insight}
-                onDismiss={handleDismiss}
-                onAction={handleAction}
+                onDismiss={dismissInsight}
+                onAction={markInsightRead}
               />
             ))
           )}
         </AnimatePresence>
-      </div>
-    </div>
+      </ScrollView>
+    </View>
   );
 };
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: colors.black,
+  },
+  scrollView: {
+    flex: 1,
+  },
+  contentContainer: {
+    paddingHorizontal: spacing[4],
+    paddingBottom: spacing[24],
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: spacing[4],
+    marginBottom: spacing[2],
+  },
+  title: {
+    fontSize: typography.fontSizes['2xl'],
+    fontWeight: typography.fontWeights.bold,
+    color: colors.white,
+  },
+  badge: {
+    marginLeft: spacing[3],
+    backgroundColor: colors.mintMuted,
+    paddingHorizontal: spacing[2.5],
+    paddingVertical: spacing[1],
+    borderRadius: borderRadius.full,
+  },
+  badgeText: {
+    fontSize: typography.fontSizes.xs,
+    fontWeight: typography.fontWeights.bold,
+    color: colors.mint,
+  },
+  subtitle: {
+    fontSize: typography.fontSizes.base,
+    color: colors.neutral400,
+    marginBottom: spacing[8],
+  },
+  loadingContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: spacing[20],
+  },
+  loadingText: {
+    marginTop: spacing[4],
+    fontSize: typography.fontSizes.sm,
+    color: colors.neutral500,
+  },
+  insightCard: {
+    backgroundColor: colors.surface200,
+    borderRadius: borderRadius['3xl'],
+    padding: spacing[6],
+    borderWidth: 1,
+    borderColor: colors.surface300,
+    marginBottom: spacing[6],
+    overflow: 'hidden',
+  },
+  insightGlow: {
+    position: 'absolute',
+    top: -100,
+    right: -100,
+    width: 200,
+    height: 200,
+    borderRadius: 100,
+    opacity: 0.15,
+  },
+  insightHeader: {
+    flexDirection: 'row',
+    gap: spacing[4],
+    marginBottom: spacing[4],
+  },
+  insightIconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: borderRadius.xl,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  insightContent: {
+    flex: 1,
+  },
+  insightTitle: {
+    fontSize: typography.fontSizes.lg,
+    fontWeight: typography.fontWeights.semibold,
+    color: colors.white,
+    flex: 1,
+    marginBottom: spacing[1],
+  },
+  unreadDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.mint,
+    marginLeft: spacing[2],
+    marginTop: spacing[2],
+  },
+  insightDescription: {
+    fontSize: typography.fontSizes.sm,
+    color: colors.neutral400,
+    lineHeight: 20,
+  },
+  insightData: {
+    backgroundColor: 'rgba(26, 26, 26, 0.5)',
+    borderRadius: borderRadius.xl,
+    padding: spacing[4],
+    marginBottom: spacing[4],
+  },
+  savingsDisplay: {
+    alignItems: 'center',
+  },
+  savingsLabel: {
+    fontSize: typography.fontSizes.xs,
+    color: colors.neutral500,
+    textTransform: 'uppercase',
+    letterSpacing: typography.letterSpacing.wide,
+    marginBottom: spacing[1],
+  },
+  savingsAmount: {
+    fontSize: typography.fontSizes['3xl'],
+    fontWeight: typography.fontWeights.light,
+    color: colors.white,
+  },
+  savingsPeriod: {
+    fontSize: typography.fontSizes.lg,
+    color: colors.neutral400,
+  },
+  progressContainer: {
+    gap: spacing[2],
+  },
+  progressLabel: {
+    fontSize: typography.fontSizes.xs,
+    color: colors.neutral400,
+  },
+  progressValue: {
+    fontSize: typography.fontSizes.xs,
+    fontFamily: 'monospace',
+    color: colors.neutral400,
+  },
+  progressBar: {
+    height: 12,
+    backgroundColor: colors.surface400,
+    borderRadius: borderRadius.full,
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: '100%',
+    backgroundColor: colors.warning,
+    borderRadius: borderRadius.full,
+  },
+  insightActions: {
+    flexDirection: 'row',
+    gap: spacing[3],
+  },
+  dismissButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing[2],
+    paddingVertical: spacing[2.5],
+    backgroundColor: colors.surface300,
+    borderRadius: borderRadius.xl,
+  },
+  dismissButtonText: {
+    fontSize: typography.fontSizes.sm,
+    fontWeight: typography.fontWeights.medium,
+    color: colors.white,
+  },
+  actionButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing[2],
+    paddingVertical: spacing[2.5],
+    backgroundColor: colors.white,
+    borderRadius: borderRadius.xl,
+  },
+  actionButtonText: {
+    fontSize: typography.fontSizes.sm,
+    fontWeight: typography.fontWeights.bold,
+    color: colors.black,
+  },
+  emptyState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: spacing[16],
+  },
+  emptyIcon: {
+    fontSize: 64,
+    marginBottom: spacing[4],
+  },
+  emptyTitle: {
+    fontSize: typography.fontSizes.lg,
+    fontWeight: typography.fontWeights.semibold,
+    color: colors.white,
+    marginBottom: spacing[2],
+  },
+  emptyText: {
+    fontSize: typography.fontSizes.sm,
+    color: colors.neutral500,
+    textAlign: 'center',
+    maxWidth: 260,
+  },
+});
 
 export default Insights;
