@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { INSIGHTS } from '../mockData';
 import { Lightbulb, TrendingUp, AlertTriangle, ArrowRight, Clock, Check, X } from 'lucide-react';
 import { formatCurrency } from '../utils';
 import { Insight } from '../types';
+import { useInsightStore } from '../stores';
+import { useToast } from '../components/Toast';
 import { InsightCardSkeleton } from '../components/Skeleton';
 
 const InsightIcon = ({ type }: { type: string }) => {
@@ -147,30 +148,29 @@ const InsightCard: React.FC<InsightCardProps> = ({ insight, onDismiss, onAction 
 };
 
 const Insights: React.FC = () => {
-  const [insights, setInsights] = useState<Insight[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const { insights, dismissInsight, markAsRead, getUnreadCount } = useInsightStore();
+  const { showToast } = useToast();
 
   // Simulate loading
   useEffect(() => {
     const timer = setTimeout(() => {
-      setInsights(INSIGHTS);
       setIsLoading(false);
-    }, 1200);
+    }, 800);
     return () => clearTimeout(timer);
   }, []);
 
   const handleDismiss = (id: string) => {
-    setInsights(prev => prev.filter(i => i.id !== id));
+    dismissInsight(id);
+    showToast('Insight dismissed', 'info');
   };
 
   const handleAction = (id: string) => {
-    // Mark as read and would trigger the action in real app
-    setInsights(prev => prev.map(i => 
-      i.id === id ? { ...i, isRead: true } : i
-    ));
+    markAsRead(id);
+    showToast('Action taken!', 'success');
   };
 
-  const unreadCount = insights.filter(i => !i.isRead).length;
+  const unreadCount = getUnreadCount();
 
   return (
     <div className="pb-24 pt-4 px-4">

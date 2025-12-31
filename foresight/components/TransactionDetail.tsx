@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, MapPin, Calendar, CreditCard, Tag, Repeat, Edit2, Trash2, Share2 } from 'lucide-react';
+import { X, MapPin, Calendar, CreditCard, Tag, Repeat, Edit2, Trash2, Share2, AlertTriangle } from 'lucide-react';
 import { Transaction } from '../types';
 import { formatCurrency, getCategoryIcon, getCategoryColor } from '../utils';
 
@@ -8,9 +8,12 @@ interface Props {
   transaction: Transaction | null;
   isOpen: boolean;
   onClose: () => void;
+  onDelete?: (id: string) => void;
 }
 
-const TransactionDetail: React.FC<Props> = ({ transaction, isOpen, onClose }) => {
+const TransactionDetail: React.FC<Props> = ({ transaction, isOpen, onClose, onDelete }) => {
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+
   if (!transaction) return null;
 
   const isExpense = transaction.type === 'expense';
@@ -25,6 +28,14 @@ const TransactionDetail: React.FC<Props> = ({ transaction, isOpen, onClose }) =>
   };
 
   const { date, time } = formatDateTime(transaction.date);
+
+  const handleDelete = () => {
+    if (onDelete) {
+      onDelete(transaction.id);
+    }
+    setShowDeleteConfirm(false);
+    onClose();
+  };
 
   const DetailRow = ({ icon: Icon, label, value, color }: { 
     icon: React.ElementType; 
@@ -76,6 +87,40 @@ const TransactionDetail: React.FC<Props> = ({ transaction, isOpen, onClose }) =>
                 <X size={20} className="text-neutral-400" />
               </button>
             </div>
+
+            {/* Delete Confirmation */}
+            <AnimatePresence>
+              {showDeleteConfirm && (
+                <motion.div
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  className="mx-6 mb-4 p-4 bg-danger/10 border border-danger/30 rounded-xl"
+                >
+                  <div className="flex items-start gap-3">
+                    <AlertTriangle className="text-danger shrink-0 mt-0.5" size={20} />
+                    <div className="flex-1">
+                      <h4 className="text-white font-medium mb-1">Delete this transaction?</h4>
+                      <p className="text-neutral-400 text-sm mb-3">This action cannot be undone.</p>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => setShowDeleteConfirm(false)}
+                          className="flex-1 py-2 bg-surface-300 text-white text-sm font-medium rounded-lg hover:bg-surface-400"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          onClick={handleDelete}
+                          className="flex-1 py-2 bg-danger text-white text-sm font-medium rounded-lg hover:bg-danger/90"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
 
             {/* Main Content */}
             <div className="px-6 pb-6">
@@ -149,7 +194,10 @@ const TransactionDetail: React.FC<Props> = ({ transaction, isOpen, onClose }) =>
                   <Share2 size={20} className="text-neutral-400" />
                   <span className="text-xs text-neutral-400">Share</span>
                 </button>
-                <button className="flex flex-col items-center gap-2 p-4 bg-surface-300 rounded-xl hover:bg-danger/20 transition-colors group">
+                <button 
+                  onClick={() => setShowDeleteConfirm(true)}
+                  className="flex flex-col items-center gap-2 p-4 bg-surface-300 rounded-xl hover:bg-danger/20 transition-colors group"
+                >
                   <Trash2 size={20} className="text-neutral-400 group-hover:text-danger transition-colors" />
                   <span className="text-xs text-neutral-400 group-hover:text-danger transition-colors">Delete</span>
                 </button>
@@ -174,4 +222,3 @@ const TransactionDetail: React.FC<Props> = ({ transaction, isOpen, onClose }) =>
 };
 
 export default TransactionDetail;
-

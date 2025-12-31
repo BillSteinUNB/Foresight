@@ -1,12 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Check, Target } from 'lucide-react';
+import { X, Check, Target, AlertCircle } from 'lucide-react';
 import { SavingsGoal } from '../types';
+import { formatCurrency } from '../utils';
 
 interface Props {
   isOpen: boolean;
   onClose: () => void;
   onAdd: (goal: Omit<SavingsGoal, 'id'>) => void;
+}
+
+interface ValidationErrors {
+  name?: string;
+  targetAmount?: string;
+  currentAmount?: string;
 }
 
 const GOAL_ICONS = ['🏖️', '🚗', '🏠', '💍', '📱', '🎓', '💼', '🎮', '✈️', '👶', '🏋️', '🎸'];
@@ -19,6 +26,7 @@ const AddGoal: React.FC<Props> = ({ isOpen, onClose, onAdd }) => {
   const [selectedIcon, setSelectedIcon] = useState('🎯');
   const [selectedColor, setSelectedColor] = useState(GOAL_COLORS[0]);
   const [step, setStep] = useState<1 | 2>(1);
+  const [errors, setErrors] = useState<ValidationErrors>({});
 
   useEffect(() => {
     if (isOpen) {
@@ -28,30 +36,68 @@ const AddGoal: React.FC<Props> = ({ isOpen, onClose, onAdd }) => {
       setSelectedIcon('🎯');
       setSelectedColor(GOAL_COLORS[0]);
       setStep(1);
+      setErrors({});
     }
   }, [isOpen]);
 
+  const validateStep1 = (): boolean => {
+    const newErrors: ValidationErrors = {};
+    
+    if (!name.trim()) {
+      newErrors.name = 'Please enter a goal name';
+    } else if (name.trim().length < 2) {
+      newErrors.name = 'Goal name must be at least 2 characters';
+    }
+    
+    const target = parseFloat(targetAmount);
+    if (!targetAmount || isNaN(target)) {
+      newErrors.targetAmount = 'Please enter a valid target amount';
+    } else if (target <= 0) {
+      newErrors.targetAmount = 'Target amount must be greater than 0';
+    } else if (target > 10000000) {
+      newErrors.targetAmount = 'Target amount is too large (max $10M)';
+    }
+    
+    const current = parseFloat(currentAmount);
+    if (currentAmount && !isNaN(current)) {
+      if (current < 0) {
+        newErrors.currentAmount = 'Starting amount cannot be negative';
+      } else if (current > target) {
+        newErrors.currentAmount = 'Starting amount cannot exceed target amount';
+      }
+    }
+    
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
   const handleNext = () => {
-    if (name && targetAmount) {
+    if (validateStep1()) {
       setStep(2);
     }
   };
 
   const handleSubmit = () => {
-    if (name && targetAmount) {
-      onAdd({
-        name,
-        targetAmount: parseFloat(targetAmount),
-        currentAmount: parseFloat(currentAmount) || 0,
-        icon: selectedIcon,
-        color: selectedColor
-      });
-      onClose();
+    // Re-validate step 1 before submitting
+    if (!validateStep1()) {
+      setStep(1);
+      return;
     }
+
+    const target = parseFloat(targetAmount);
+    const current = parseFloat(currentAmount) || 0;
+
+    onAdd({
+      name: name.trim(),
+      targetAmount: target,
+      currentAmount: current,
+      icon: selectedIcon,
+      color: selectedColor
+    });
+    onClose();
   };
 
-  const isStep1Valid = name.trim() && parseFloat(targetAmount) > 0;
-  const isStep2Valid = true; // Icon and color always have defaults
+  const isStep1Valid = name.trim().length >= 2 && parseFloat(targetAmount) > 0;
 
   if (!isOpen) return null;
 
@@ -111,11 +157,27 @@ const AddGoal: React.FC<Props> = ({ isOpen, onClose, onAdd }) => {
                   <input
                     type="text"
                     value={name}
-                    onChange={(e) => setName(e.target.value)}
+                    onChange={(e) => {
+                      setName(e.target.value);
+                      if (errors.name) setErrors({ ...errors, name: undefined });
+                    }}
                     placeholder="e.g., Dream Vacation"
-                    className="w-full bg-surface-100 border border-surface-300 rounded-xl p-4 text-white placeholder:text-neutral-600 focus:outline-none focus:border-mint"
+                    className={`w-full bg-surface-100 border rounded-xl p-4 text-white placeholder:text-neutral-600 focus:outline-none font-medium ${
+                      errors.name ? 'border-danger focus:border-danger' : 'border-surface-300 focus:border-mint'
+                    }`}
                     autoFocus
+                    maxLength={50}
                   />
+                  {errors.name && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -5 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="flex items-center gap-2 mt-2 text-danger text-sm"
+                    >
+                      <AlertCircle size={14} />
+                      <span>{errors.name}</span>
+                    </motion.div>
+                  )}
                 </div>
 
                 {/* Target Amount */}
@@ -128,11 +190,32 @@ const AddGoal: React.FC<Props> = ({ isOpen, onClose, onAdd }) => {
                     <input
                       type="number"
                       value={targetAmount}
-                      onChange={(e) => setTargetAmount(e.target.value)}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        // Allow empty, numbers, and one decimal point
+                        if (value === '' || /^\d*\.?\d*$/.test(value)) {
+                          setTargetAmount(value);
+                          if (errors.targetAmount) setErrors({ ...errors, targetAmount: undefined });
+                        }
+                      }}
                       placeholder="5,000"
-                      className="w-full bg-surface-100 border border-surface-300 rounded-xl p-4 pl-8 text-white placeholder:text-neutral-600 focus:outline-none focus:border-mint font-mono"
+                      min="0.01"
+                      step="0.01"
+                      className={`w-full bg-surface-100 border rounded-xl p-4 pl-8 text-white placeholder:text-neutral-600 focus:outline-none font-mono ${
+                        errors.targetAmount ? 'border-danger focus:border-danger' : 'border-surface-300 focus:border-mint'
+                      }`}
                     />
                   </div>
+                  {errors.targetAmount && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -5 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="flex items-center gap-2 mt-2 text-danger text-sm"
+                    >
+                      <AlertCircle size={14} />
+                      <span>{errors.targetAmount}</span>
+                    </motion.div>
+                  )}
                 </div>
 
                 {/* Starting Amount (Optional) */}
@@ -145,11 +228,31 @@ const AddGoal: React.FC<Props> = ({ isOpen, onClose, onAdd }) => {
                     <input
                       type="number"
                       value={currentAmount}
-                      onChange={(e) => setCurrentAmount(e.target.value)}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        if (value === '' || /^\d*\.?\d*$/.test(value)) {
+                          setCurrentAmount(value);
+                          if (errors.currentAmount) setErrors({ ...errors, currentAmount: undefined });
+                        }
+                      }}
                       placeholder="0"
-                      className="w-full bg-surface-100 border border-surface-300 rounded-xl p-4 pl-8 text-white placeholder:text-neutral-600 focus:outline-none focus:border-mint font-mono"
+                      min="0"
+                      step="0.01"
+                      className={`w-full bg-surface-100 border rounded-xl p-4 pl-8 text-white placeholder:text-neutral-600 focus:outline-none font-mono ${
+                        errors.currentAmount ? 'border-danger focus:border-danger' : 'border-surface-300 focus:border-mint'
+                      }`}
                     />
                   </div>
+                  {errors.currentAmount && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -5 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="flex items-center gap-2 mt-2 text-danger text-sm"
+                    >
+                      <AlertCircle size={14} />
+                      <span>{errors.currentAmount}</span>
+                    </motion.div>
+                  )}
                 </div>
 
                 <button
@@ -224,7 +327,7 @@ const AddGoal: React.FC<Props> = ({ isOpen, onClose, onAdd }) => {
                     <div>
                       <span className="text-white font-semibold block">{name || 'Goal Name'}</span>
                       <span className="text-neutral-500 text-sm">
-                        ${parseFloat(currentAmount) || 0} / ${parseFloat(targetAmount) || 0}
+                        {formatCurrency(parseFloat(currentAmount) || 0)} / {formatCurrency(parseFloat(targetAmount) || 0)}
                       </span>
                     </div>
                   </div>
@@ -234,13 +337,12 @@ const AddGoal: React.FC<Props> = ({ isOpen, onClose, onAdd }) => {
                 <div className="flex gap-3">
                   <button
                     onClick={() => setStep(1)}
-                    className="flex-1 py-4 bg-surface-300 text-white font-medium rounded-xl hover:bg-surface-400"
+                    className="flex-1 py-4 bg-surface-300 text-white font-medium rounded-xl hover:bg-surface-400 transition-colors"
                   >
                     Back
                   </button>
                   <button
                     onClick={handleSubmit}
-                    disabled={!isStep2Valid}
                     className="flex-1 py-4 bg-mint text-black font-semibold rounded-xl flex items-center justify-center gap-2 hover:bg-mint-hover transition-colors"
                   >
                     <Check size={20} />

@@ -1,8 +1,9 @@
 import React, { useState, useMemo } from 'react';
-import { Search, X, SlidersHorizontal } from 'lucide-react';
+import { Search, X, SlidersHorizontal, Trash2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { TRANSACTIONS } from '../mockData';
+import { useTransactionStore } from '../stores';
 import TransactionItem from '../components/TransactionItem';
+import TransactionDetail from '../components/TransactionDetail';
 import { formatDate, formatCurrency } from '../utils';
 import { Transaction, BudgetCategory } from '../types';
 
@@ -12,18 +13,24 @@ interface FilterChipProps {
   label: string;
   active: boolean;
   onClick: () => void;
+  count?: number;
 }
 
-const FilterChip: React.FC<FilterChipProps> = ({ label, active, onClick }) => (
+const FilterChip: React.FC<FilterChipProps> = ({ label, active, onClick, count }) => (
   <button 
     onClick={onClick}
-    className={`px-4 py-2 font-semibold rounded-full text-xs transition-all ${
+    className={`px-4 py-2 font-semibold rounded-full text-xs transition-all flex items-center gap-1.5 ${
       active 
         ? 'bg-mint text-black' 
         : 'bg-surface-200 text-neutral-400 hover:bg-surface-300 hover:text-neutral-200'
     }`}
   >
     {label}
+    {count !== undefined && (
+      <span className={`${active ? 'text-black/60' : 'text-neutral-600'}`}>
+        {count}
+      </span>
+    )}
   </button>
 );
 
@@ -65,17 +72,21 @@ const Activity: React.FC = () => {
   const [selectedCategories, setSelectedCategories] = useState<Set<BudgetCategory>>(new Set());
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
+  const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
+
+  // Store hooks
+  const { transactions, deleteTransaction, getTotalByType } = useTransactionStore();
 
   // All available categories from transactions
   const allCategories = useMemo(() => {
     const cats = new Set<BudgetCategory>();
-    TRANSACTIONS.forEach(t => cats.add(t.category));
+    transactions.forEach(t => cats.add(t.category));
     return Array.from(cats);
-  }, []);
+  }, [transactions]);
 
   // Filter transactions
   const filteredTransactions = useMemo(() => {
-    return TRANSACTIONS.filter(t => {
+    return transactions.filter(t => {
       // Type filter
       if (filter === 'income' && t.type !== 'income') return false;
       if (filter === 'expense' && t.type !== 'expense') return false;
@@ -94,11 +105,14 @@ const Activity: React.FC = () => {
 
       return true;
     });
-  }, [filter, searchQuery, selectedCategories]);
+  }, [transactions, filter, searchQuery, selectedCategories]);
 
   // Group filtered transactions by date
   const grouped = useMemo(() => {
-    return filteredTransactions.reduce((acc, t) => {
+    const sorted = [...filteredTransactions].sort(
+      (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+    );
+    return sorted.reduce((acc, t) => {
       const date = formatDate(t.date);
       if (!acc[date]) acc[date] = [];
       acc[date].push(t);
@@ -125,6 +139,11 @@ const Activity: React.FC = () => {
     setShowFilters(false);
   };
 
+  const handleDeleteTransaction = (id: string) => {
+    deleteTransaction(id);
+    setSelectedTransaction(null);
+  };
+
   const hasActiveFilters = filter !== 'all' || searchQuery.trim() || selectedCategories.size > 0;
 
   // Calculate totals for header stats
@@ -137,6 +156,10 @@ const Activity: React.FC = () => {
       .reduce((sum, t) => sum + t.amount, 0);
     return { income, expenses, net: income - expenses };
   }, [filteredTransactions]);
+
+  // Counts for filter chips
+  const incomeCount = transactions.filter(t => t.type === 'income').length;
+  const expenseCount = transactions.filter(t => t.type === 'expense').length;
 
   return (
     <div className="pb-24 pt-4 px-4 min-h-screen">
@@ -195,10 +218,25 @@ const Activity: React.FC = () => {
       </AnimatePresence>
 
       {/* Type Filters */}
-      <div className="flex gap-2 mb-4">
-        <FilterChip label="All" active={filter === 'all'} onClick={() => setFilter('all')} />
-        <FilterChip label="Income" active={filter === 'income'} onClick={() => setFilter('income')} />
-        <FilterChip label="Expenses" active={filter === 'expense'} onClick={() => setFilter('expense')} />
+      <div className="flex gap-2 mb-4 overflow-x-auto no-scrollbar">
+        <FilterChip 
+          label="All" 
+          active={filter === 'all'} 
+          onClick={() => setFilter('all')} 
+          count={transactions.length}
+        />
+        <FilterChip 
+          label="Income" 
+          active={filter === 'income'} 
+          onClick={() => setFilter('income')} 
+          count={incomeCount}
+        />
+        <FilterChip 
+          label="Expenses" 
+          active={filter === 'expense'} 
+          onClick={() => setFilter('expense')} 
+          count={expenseCount}
+        />
       </div>
 
       {/* Category Filters */}
@@ -282,8 +320,8 @@ const Activity: React.FC = () => {
             )}
           </div>
         ) : (
-          Object.entries(grouped).map(([date, transactions]) => {
-            const dailyTotal = transactions.reduce(
+          Object.entries(grouped).map(([date, dayTransactions]) => {
+            const dailyTotal = dayTransactions.reduce(
               (sum, t) => t.type === 'expense' ? sum - t.amount : sum + t.amount, 
               0
             );
@@ -301,8 +339,12 @@ const Activity: React.FC = () => {
                   </span>
                 </div>
                 <div className="bg-surface-200 rounded-2xl border border-surface-300 overflow-hidden">
-                  {transactions.map(t => (
-                    <TransactionItem key={t.id} transaction={t} onClick={() => {}} />
+                  {dayTransactions.map(t => (
+                    <TransactionItem 
+                      key={t.id} 
+                      transaction={t} 
+                      onClick={() => setSelectedTransaction(t)} 
+                    />
                   ))}
                 </div>
               </motion.div>
@@ -310,6 +352,14 @@ const Activity: React.FC = () => {
           })
         )}
       </div>
+
+      {/* Transaction Detail Modal */}
+      <TransactionDetail
+        transaction={selectedTransaction}
+        isOpen={!!selectedTransaction}
+        onClose={() => setSelectedTransaction(null)}
+        onDelete={handleDeleteTransaction}
+      />
     </div>
   );
 };

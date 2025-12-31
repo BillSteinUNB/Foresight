@@ -7,7 +7,8 @@ import Activity from './screens/Activity';
 import Insights from './screens/Insights';
 import Profile from './screens/Profile';
 import AddTransaction from './components/AddTransaction';
-import { TRANSACTIONS } from './mockData';
+import ToastProvider, { useToast } from './components/Toast';
+import { useTransactionStore } from './stores';
 import { Transaction } from './types';
 
 type TabType = 'home' | 'activity' | 'insights' | 'profile';
@@ -31,23 +32,35 @@ const NavButton: React.FC<NavButtonProps> = ({ active, onClick, icon: Icon, labe
   </button>
 );
 
-const App: React.FC = () => {
+const AppContent: React.FC = () => {
   const [activeTab, setActiveTab] = useState<TabType>('home');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const { addTransaction } = useTransactionStore();
+  const { showToast } = useToast();
 
-  // Function to handle new transaction (updates mock data in memory for session)
   const handleAddTransaction = (newTx: Partial<Transaction>) => {
-    const transaction: Transaction = {
-      id: `new_${Date.now()}`,
-      amount: newTx.amount || 0,
+    // Validation
+    if (!newTx.amount || newTx.amount <= 0) {
+      showToast('Please enter a valid amount', 'error');
+      return;
+    }
+    if (!newTx.merchantName || newTx.merchantName.trim().length === 0) {
+      showToast('Please enter a merchant name', 'error');
+      return;
+    }
+
+    addTransaction({
+      amount: newTx.amount,
       type: newTx.type || 'expense',
       date: newTx.date || new Date().toISOString(),
-      merchantName: newTx.merchantName || 'Unknown',
+      merchantName: newTx.merchantName.trim(),
       category: newTx.category || 'other',
       merchantLogo: newTx.merchantLogo,
-      status: newTx.status
-    };
-    TRANSACTIONS.unshift(transaction);
+      status: newTx.status || 'completed'
+    });
+
+    showToast('Transaction added successfully!', 'success');
+    setIsAddModalOpen(false);
     // Navigate to activity to see the new transaction
     setActiveTab('activity');
   };
@@ -132,6 +145,14 @@ const App: React.FC = () => {
         onAdd={handleAddTransaction}
       />
     </div>
+  );
+};
+
+const App: React.FC = () => {
+  return (
+    <ToastProvider>
+      <AppContent />
+    </ToastProvider>
   );
 };
 
