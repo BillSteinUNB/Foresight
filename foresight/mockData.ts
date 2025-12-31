@@ -1,11 +1,53 @@
-import { Transaction, SavingsGoal, Bill, Insight, User } from './types';
+import { Transaction, SavingsGoal, Bill, Insight, User, LinkedAccount, UserPreferences } from './types';
 
 export const USER: User = {
   name: "Alex",
   safeToSpend: 2847.00,
   balance: 4782.45,
   financialHealthScore: 78,
-  currency: "USD"
+  currency: "USD",
+  netWorth: 34500,
+  memberSince: 2024
+};
+
+export const LINKED_ACCOUNTS: LinkedAccount[] = [
+  {
+    id: 'acc1',
+    provider: 'plaid',
+    institutionName: 'Chase',
+    accountType: 'checking',
+    lastFour: '4521',
+    balance: 4782.45,
+    lastSynced: new Date().toISOString(),
+    logoUrl: 'https://logo.clearbit.com/chase.com'
+  },
+  {
+    id: 'acc2',
+    provider: 'plaid',
+    institutionName: 'American Express',
+    accountType: 'credit',
+    lastFour: '1008',
+    balance: -1247.82,
+    lastSynced: new Date(Date.now() - 3600000).toISOString(),
+    logoUrl: 'https://logo.clearbit.com/americanexpress.com'
+  }
+];
+
+export const USER_PREFERENCES: UserPreferences = {
+  currency: 'USD',
+  locale: 'en-US',
+  notifications: {
+    pushEnabled: true,
+    emailEnabled: true,
+    billReminders: true,
+    spendingAlerts: true,
+    weeklyDigest: false,
+    insightAlerts: true
+  },
+  privacyMode: false,
+  biometricEnabled: true,
+  theme: 'dark',
+  aiInsightsEnabled: true
 };
 
 export const TRANSACTIONS: Transaction[] = [

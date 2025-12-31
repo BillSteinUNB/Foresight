@@ -58,4 +58,85 @@ export interface User {
   balance: number;
   financialHealthScore: number;
   currency: string;
+  netWorth?: number;
+  memberSince?: number;
+}
+
+// === Extended Types (Phase 2+) ===
+
+export interface LinkedAccount {
+  id: string;
+  provider: 'plaid' | 'yodlee' | 'manual';
+  institutionName: string;
+  accountType: 'checking' | 'savings' | 'credit' | 'investment';
+  lastFour: string;
+  balance: number;
+  lastSynced: string;
+  logoUrl?: string;
+}
+
+export interface RecurringTransaction {
+  id: string;
+  baseTransactionId: string;
+  frequency: 'daily' | 'weekly' | 'biweekly' | 'monthly' | 'yearly';
+  nextOccurrence: string;
+  amount: number;
+  merchantName: string;
+  category: BudgetCategory;
+}
+
+export interface NotificationSettings {
+  pushEnabled: boolean;
+  emailEnabled: boolean;
+  billReminders: boolean;
+  spendingAlerts: boolean;
+  weeklyDigest: boolean;
+  insightAlerts: boolean;
+}
+
+export interface UserPreferences {
+  currency: string;
+  locale: string;
+  notifications: NotificationSettings;
+  privacyMode: boolean;
+  biometricEnabled: boolean;
+  theme: 'dark' | 'light' | 'system';
+  aiInsightsEnabled: boolean;
+}
+
+export interface Space {
+  id: string;
+  name: string;
+  members: SpaceMember[];
+  budget: number;
+  spent: number;
+  category?: BudgetCategory;
+  color: string;
+  icon: string;
+}
+
+export interface SpaceMember {
+  id: string;
+  userId: string;
+  name: string;
+  role: 'owner' | 'admin' | 'member';
+  avatarUrl?: string;
+}
+
+// Extended Transaction interface fields (to add to existing)
+export interface TransactionExtended extends Transaction {
+  geolocation?: { lat: number; lng: number };
+  aiTags?: string[];
+  isRecurring?: boolean;
+  linkedAccountId?: string;
+  receiptUrl?: string;
+  notes?: string;
+}
+
+// Extended Insight interface fields (to add to existing)
+export interface InsightExtended extends Insight {
+  actionUrl?: string;
+  priority: 'high' | 'medium' | 'low';
+  expiresAt?: string;
+  category?: 'saving' | 'spending' | 'income' | 'subscription' | 'bill';
 }

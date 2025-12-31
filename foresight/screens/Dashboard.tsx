@@ -1,13 +1,34 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Bell, ArrowUpRight, TrendingUp } from 'lucide-react';
 import { USER, GOALS, BILLS, TRANSACTIONS } from '../mockData';
 import { formatCurrency, formatCompactCurrency } from '../utils';
+import { SavingsGoal } from '../types';
 import HealthDial from '../components/HealthDial';
 import LiquidGauge from '../components/LiquidGauge';
 import TransactionItem from '../components/TransactionItem';
+import AddGoal from '../components/AddGoal';
+
+// Mutable goals state for the session (in a real app, this would be in global state)
+let sessionGoals = [...GOALS];
 
 const Dashboard: React.FC = () => {
+  const [goals, setGoals] = useState<SavingsGoal[]>(sessionGoals);
+  const [isAddGoalOpen, setIsAddGoalOpen] = useState(false);
+
+  const handleAddGoal = (newGoal: Omit<SavingsGoal, 'id'>) => {
+    const goal: SavingsGoal = {
+      id: `goal_${Date.now()}`,
+      ...newGoal
+    };
+    const updatedGoals = [...goals, goal];
+    setGoals(updatedGoals);
+    sessionGoals = updatedGoals;
+  };
+
+  // Calculate total bills amount
+  const totalBills = BILLS.reduce((sum, bill) => sum + bill.amount, 0);
+
   return (
     <div className="pb-24 pt-4 px-4 space-y-8">
       
@@ -17,9 +38,9 @@ const Dashboard: React.FC = () => {
           <h1 className="text-sm font-medium text-neutral-400">Good evening,</h1>
           <h2 className="text-2xl font-bold text-white tracking-tight">{USER.name}</h2>
         </div>
-        <div className="relative p-2 bg-surface-200 rounded-full border border-surface-300">
+        <div className="relative p-2 bg-surface-200 rounded-full border border-surface-300 hover:bg-surface-300 transition-colors cursor-pointer">
             <Bell size={20} className="text-white" />
-            <div className="absolute top-2 right-2.5 w-2 h-2 bg-danger rounded-full border border-black" />
+            <div className="absolute top-2 right-2.5 w-2 h-2 bg-danger rounded-full border border-black animate-pulse" />
         </div>
       </header>
 
@@ -48,7 +69,7 @@ const Dashboard: React.FC = () => {
             <span className="text-neutral-600">-</span>
             <div className="flex flex-col">
                 <span className="text-neutral-500 text-xs mb-1">Bills</span>
-                <span className="text-white font-mono">$1.9k</span>
+                <span className="text-white font-mono">{formatCompactCurrency(totalBills)}</span>
             </div>
             <span className="text-neutral-600">=</span>
             <div className="flex flex-col">
@@ -73,7 +94,9 @@ const Dashboard: React.FC = () => {
                 <TrendingUp size={16} className="text-mint" />
              </div>
              <div>
-                 <span className="text-2xl text-white font-semibold block mb-1">$34.5k</span>
+                 <span className="text-2xl text-white font-semibold block mb-1">
+                   {formatCompactCurrency(USER.netWorth || 34500)}
+                 </span>
                  <span className="text-xs text-mint flex items-center gap-1">
                     <ArrowUpRight size={12} />
                     $1.2k this mo
@@ -87,7 +110,12 @@ const Dashboard: React.FC = () => {
         <h3 className="text-lg font-semibold text-white mb-4">Upcoming Bills</h3>
         <div className="space-y-3">
             {BILLS.map(bill => (
-                <div key={bill.id} className="flex items-center justify-between p-4 bg-surface-200 rounded-xl border border-surface-300">
+                <motion.div 
+                  key={bill.id} 
+                  className="flex items-center justify-between p-4 bg-surface-200 rounded-xl border border-surface-300 hover:bg-surface-300/50 transition-colors cursor-pointer"
+                  whileHover={{ scale: 1.01 }}
+                  whileTap={{ scale: 0.99 }}
+                >
                     <div className="flex items-center gap-3">
                         <div className={`w-2 h-2 rounded-full ${bill.status === 'danger' ? 'bg-danger animate-pulse' : bill.status === 'warning' ? 'bg-warning' : 'bg-mint'}`} />
                         <div className="flex flex-col">
@@ -96,7 +124,7 @@ const Dashboard: React.FC = () => {
                         </div>
                     </div>
                     <span className="text-white font-mono">{formatCurrency(bill.amount)}</span>
-                </div>
+                </motion.div>
             ))}
         </div>
       </div>
@@ -105,13 +133,23 @@ const Dashboard: React.FC = () => {
       <div>
         <div className="flex justify-between items-center mb-4">
             <h3 className="text-lg font-semibold text-white">Savings Goals</h3>
-            <button className="text-mint text-sm font-medium">+ Add</button>
+            <button 
+              onClick={() => setIsAddGoalOpen(true)}
+              className="text-mint text-sm font-medium hover:text-mint-hover transition-colors"
+            >
+              + Add
+            </button>
         </div>
         <div className="flex gap-4 overflow-x-auto no-scrollbar pb-2">
-            {GOALS.map(goal => {
+            {goals.map(goal => {
                 const percentage = (goal.currentAmount / goal.targetAmount) * 100;
                 return (
-                    <div key={goal.id} className="flex flex-col items-center gap-3 min-w-[100px]">
+                    <motion.div 
+                      key={goal.id} 
+                      className="flex flex-col items-center gap-3 min-w-[100px] cursor-pointer"
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                    >
                         <div className="relative">
                             <LiquidGauge percentage={percentage} color={goal.color} size={90} />
                             <span className="absolute -top-3 left-1/2 -translate-x-1/2 text-2xl z-40 bg-surface-200 rounded-full p-1 border border-surface-300 shadow-lg">
@@ -122,9 +160,20 @@ const Dashboard: React.FC = () => {
                             <span className="text-white text-sm font-medium block">{goal.name}</span>
                             <span className="text-neutral-500 text-xs">{formatCompactCurrency(goal.currentAmount)}</span>
                         </div>
-                    </div>
+                    </motion.div>
                 )
             })}
+            
+            {/* Add Goal Card */}
+            <motion.button
+              onClick={() => setIsAddGoalOpen(true)}
+              className="flex flex-col items-center justify-center gap-2 min-w-[100px] h-[150px] bg-surface-300/50 rounded-2xl border-2 border-dashed border-surface-400 hover:border-mint hover:bg-surface-300 transition-all"
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+            >
+              <span className="text-3xl">➕</span>
+              <span className="text-neutral-400 text-xs font-medium">Add Goal</span>
+            </motion.button>
         </div>
       </div>
 
@@ -132,7 +181,7 @@ const Dashboard: React.FC = () => {
       <div>
         <div className="flex justify-between items-center mb-4">
             <h3 className="text-lg font-semibold text-white">Recent Activity</h3>
-            <span className="text-neutral-500 text-sm">View all</span>
+            <span className="text-neutral-500 text-sm hover:text-neutral-300 cursor-pointer transition-colors">View all</span>
         </div>
         <div className="bg-surface-200 rounded-2xl border border-surface-300 overflow-hidden">
             {TRANSACTIONS.slice(0, 4).map(t => (
@@ -141,6 +190,12 @@ const Dashboard: React.FC = () => {
         </div>
       </div>
 
+      {/* Add Goal Modal */}
+      <AddGoal 
+        isOpen={isAddGoalOpen}
+        onClose={() => setIsAddGoalOpen(false)}
+        onAdd={handleAddGoal}
+      />
     </div>
   );
 };
