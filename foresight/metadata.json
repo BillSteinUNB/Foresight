@@ -1,0 +1,7 @@
+{
+  "name": "Foresight",
+  "description": "An intelligent money management platform delivering financial wellness through AI-powered insights, predictive metrics, and tactile interactions.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
