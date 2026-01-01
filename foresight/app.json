@@ -66,6 +66,14 @@
           "photosPermission": "Foresight needs access to your photos to attach receipt images to transactions.",
           "cameraPermission": "Foresight needs access to your camera to capture receipt photos."
         }
+      ],
+      [
+        "sentry-expo",
+        {
+          "organization": "your-organization",
+          "project": "foresight",
+          "authToken": "your-sentry-auth-token"
+        }
       ]
     ]
   }

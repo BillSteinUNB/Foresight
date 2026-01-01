@@ -34,7 +34,20 @@ nvm use 20
 npm install
 ```
 
-### 2. Start the Development Server
+### 2. Environment Variables (Optional)
+
+Create a `.env.local` file in the `foresight/` directory for sensitive configuration:
+
+```bash
+# Sentry DSN for crash reporting
+SENTRY_DSN=https://your-dsn@sentry.io/your-project-id
+
+# Supabase (configured in lib/supabase.ts)
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_ANON_KEY=your-anon-key
+```
+
+### 3. Start the Development Server
 
 ```bash
 npx expo start
@@ -128,6 +141,36 @@ nvm install 20
 ```bash
 npx expo start --clear
 ```
+
+## Crash Reporting (Sentry)
+
+Foresight uses Sentry for crash reporting and performance monitoring.
+
+### Setup
+
+1. **Create a Sentry project** at https://sentry.io
+2. **Get your DSN** from Project Settings > Client Keys (DSN)
+3. **Set the DSN** using one of these methods:
+
+**Option A: Environment Variable (Recommended)**
+```bash
+# Create .env.local in foresight/ directory
+SENTRY_DSN=https://your-dsn@sentry.io/your-project-id
+```
+
+**Option B: Direct Configuration**
+Edit `lib/sentry.ts` and replace the placeholder:
+```typescript
+const dsn = process.env.SENTRY_DSN || 'https://your-dsn@sentry.io/your-project-id';
+```
+
+### Testing in Development
+
+Crash reporting is disabled in development mode. To test Sentry:
+
+1. Build a development or production build
+2. Test on a device or emulator
+3. Check the Sentry dashboard for captured errors
 
 ## License
 

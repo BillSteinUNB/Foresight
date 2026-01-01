@@ -4,6 +4,7 @@ import { StyleSheet, View, Text, ActivityIndicator, AppState, AppStateStatus } f
 import { NavigationContainer } from '@react-navigation/native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import * as SplashScreen from 'expo-splash-screen';
 
 import { AppProvider, useApp } from './context/AppContext';
 import TabNavigator from './navigation/TabNavigator';
@@ -13,9 +14,16 @@ import ErrorBoundary from './components/ErrorBoundary';
 import AuthScreen from './screens/AuthScreen';
 import { useAuthStore } from './stores/useAuthStore';
 import { syncService } from './lib/syncService';
+import { initSentry } from './lib/sentry';
 import { Transaction } from './types';
 import { colors, spacing, typography } from './theme';
 import { canUseBiometrics } from './utils/biometrics';
+
+// Prevent splash from auto-hiding so we control when it disappears
+SplashScreen.preventAutoHideAsync();
+
+// Initialize Sentry for crash reporting
+initSentry();
 
 const AppContent: React.FC = () => {
   const { addTransaction, updateTransaction, isHydrated, preferences } = useApp();
@@ -29,6 +37,17 @@ const AppContent: React.FC = () => {
   useEffect(() => {
     initializeAuth();
   }, [initializeAuth]);
+
+  // Hide splash screen when app is ready (all stores + auth initialized)
+  useEffect(() => {
+    const hideSplash = async () => {
+      if (isHydrated && authInitialized) {
+        // Small delay to ensure smooth transition
+        await SplashScreen.hideAsync();
+      }
+    };
+    hideSplash();
+  }, [isHydrated, authInitialized]);
 
   // Sync data from cloud after successful login
   useEffect(() => {
