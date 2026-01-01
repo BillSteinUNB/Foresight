@@ -18,12 +18,20 @@ import { initSentry } from './lib/sentry';
 import { Transaction } from './types';
 import { colors, spacing, typography } from './theme';
 import { canUseBiometrics } from './utils/biometrics';
+import { cleanupLegacyStorage } from './utils/persistence';
 
 // Prevent splash from auto-hiding so we control when it disappears
 SplashScreen.preventAutoHideAsync();
 
 // Initialize Sentry for crash reporting
 initSentry();
+
+// Clean up legacy storage keys from previous app versions
+cleanupLegacyStorage().then((result) => {
+  if (result.cleaned > 0) {
+    console.log(`Cleaned up ${result.cleaned} legacy storage keys`);
+  }
+});
 
 const AppContent: React.FC = () => {
   const { addTransaction, updateTransaction, isHydrated, preferences } = useApp();

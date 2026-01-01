@@ -8,6 +8,84 @@ import {
 import { runMigrations } from './migrations';
 
 /**
+ * Legacy storage keys that should be cleaned up on app startup
+ * These keys were used in previous versions of the app
+ */
+const LEGACY_STORAGE_KEYS = [
+  '@foresight/transactions',
+  '@foresight/goals',
+  '@foresight/bills',
+  '@foresight/insights',
+  '@foresight/budget',
+  '@foresight/user',
+  '@foresight/preferences',
+  '@foresight/auth',
+  'foresight_transactions',
+  'foresight_goals',
+  'foresight_bills',
+  'foresight_user',
+  'foresight_app_state',
+  'async_storage_key',
+  'react-native-async-storage_legacy',
+];
+
+/**
+ * Clean up legacy storage keys from previous app versions
+ * This helps prevent conflicts with the new unified persistence system
+ */
+export const cleanupLegacyStorage = async (): Promise<{
+  cleaned: number;
+  errors: string[];
+}> => {
+  const results = {
+    cleaned: 0,
+    errors: [] as string[],
+  };
+
+  try {
+    const allKeys = await AsyncStorage.getAllKeys();
+
+    for (const legacyKey of LEGACY_STORAGE_KEYS) {
+      if (allKeys.includes(legacyKey)) {
+        try {
+          await AsyncStorage.removeItem(legacyKey);
+          console.log(`Cleaned up legacy storage key: ${legacyKey}`);
+          results.cleaned += 1;
+        } catch (error) {
+          const errorMessage = `Failed to clean up ${legacyKey}: ${error}`;
+          console.warn(errorMessage);
+          results.errors.push(errorMessage);
+        }
+      }
+    }
+
+    console.log(`Legacy cleanup complete: ${results.cleaned} keys removed`);
+  } catch (error) {
+    console.error('Error during legacy storage cleanup:', error);
+    results.errors.push(`Cleanup error: ${error}`);
+  }
+
+  return results;
+};
+
+/**
+ * Initialize persistence system with cleanup of legacy data
+ * Should be called once on app startup
+ */
+export const initializePersistence = async (): Promise<{
+  legacyCleanup: { cleaned: number; errors: string[] };
+  persistedState: PersistedAppState | null;
+}> => {
+  // Clean up legacy storage first
+  const legacyCleanup = await cleanupLegacyStorage();
+
+  // Then load the current persisted state
+  const persistedState = await loadPersistedState();
+
+  return { legacyCleanup, persistedState };
+};
+
+/**
  * Load persisted state from AsyncStorage
  * Returns null if no data exists or if data is corrupted
  */
