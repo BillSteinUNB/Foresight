@@ -1,19 +1,15 @@
-import React, { createContext, useContext, useState, useCallback, useMemo, ReactNode, useEffect } from 'react';
-import { Transaction, SavingsGoal, Bill, Insight, User, UserPreferences, TransactionUpdate, CategoryBudget, BudgetCategory, BillReminderPreferences, DetectedSubscription, SubscriptionOverlap } from '../types';
-import {
-  TRANSACTIONS as INITIAL_TRANSACTIONS,
-  GOALS as INITIAL_GOALS,
-  BILLS as INITIAL_BILLS,
-  INSIGHTS as INITIAL_INSIGHTS,
-  USER as INITIAL_USER,
-  USER_PREFERENCES as INITIAL_PREFERENCES
-} from '../mockData';
-import { loadPersistedState, savePersistedState } from '../utils/persistence';
-import { useDebouncedEffect } from '../utils/useDebouncedEffect';
-import { getBillStatus } from '../utils/billUtils';
-import { scheduleBillReminder, cancelNotifications, DEFAULT_BILL_REMINDER_PREFS } from '../utils/notifications';
+import React, { createContext, useContext, useMemo, ReactNode, useCallback } from 'react';
+import { Transaction, SavingsGoal, Bill, Insight, User, UserPreferences, TransactionUpdate, CategoryBudget, BudgetCategory, SubscriptionOverlap } from '../types';
 import { getRecurringTransactionIds, detectRecurringPatterns, RecurringPattern } from '../utils/recurring';
 import { detectSubscriptions, detectOverlaps, Subscription } from '../utils/subscriptions';
+
+// Import Zustand stores
+import { useTransactionStore } from '../stores/useTransactionStore';
+import { useGoalStore } from '../stores/useGoalStore';
+import { useBillStore } from '../stores/useBillStore';
+import { useInsightStore } from '../stores/useInsightStore';
+import { useBudgetStore } from '../stores/useBudgetStore';
+import { useUserStore } from '../stores/useUserStore';
 
 type NewBillInput = Omit<Bill, 'id' | 'status' | 'isPaid'> & { isPaid?: boolean };
 type UpdateBillPatch = Partial<Pick<Bill, 'name' | 'amount' | 'dueDate' | 'isPaid'>>;
@@ -81,236 +77,91 @@ interface AppProviderProps {
   children: ReactNode;
 }
 
+/**
+ * AppProvider bridges Zustand stores to React Context
+ * This maintains backward compatibility with existing useApp() calls
+ * while leveraging Zustand's performance benefits
+ */
 export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
-  // State
-  const [transactions, setTransactions] = useState<Transaction[]>([...INITIAL_TRANSACTIONS]);
-  const [goals, setGoals] = useState<SavingsGoal[]>([...INITIAL_GOALS]);
-  const [bills, setBills] = useState<Bill[]>([...INITIAL_BILLS]);
-  const [insights, setInsights] = useState<Insight[]>([...INITIAL_INSIGHTS]);
-  const [budgets, setBudgets] = useState<CategoryBudget[]>([]);
-  const [user] = useState<User>(INITIAL_USER);
-  const [preferences, setPreferences] = useState<UserPreferences>({...INITIAL_PREFERENCES});
+  // === Zustand Store Subscriptions ===
+  
+  // Transaction store
+  const transactions = useTransactionStore((state) => state.transactions);
+  const addTransaction = useTransactionStore((state) => state.addTransaction);
+  const deleteTransaction = useTransactionStore((state) => state.deleteTransaction);
+  const deleteTransactions = useTransactionStore((state) => state.deleteTransactions);
+  const updateTransaction = useTransactionStore((state) => state.updateTransaction);
+  const transactionsHydrated = useTransactionStore((state) => state.isHydrated);
 
-  // Persistence state
-  const [isHydrated, setIsHydrated] = useState(false);
-  const [persistenceError, setPersistenceError] = useState<Error | null>(null);
+  // Goal store
+  const goals = useGoalStore((state) => state.goals);
+  const addGoal = useGoalStore((state) => state.addGoal);
+  const updateGoal = useGoalStore((state) => state.updateGoal);
+  const deleteGoal = useGoalStore((state) => state.deleteGoal);
+  const goalsHydrated = useGoalStore((state) => state.isHydrated);
 
-  // Hydrate from AsyncStorage on mount
-  useEffect(() => {
-    const hydrate = async () => {
-      try {
-        const persistedData = await loadPersistedState();
+  // Bill store
+  const bills = useBillStore((state) => state.bills);
+  const addBillStore = useBillStore((state) => state.addBill);
+  const updateBillStore = useBillStore((state) => state.updateBill);
+  const deleteBillStore = useBillStore((state) => state.deleteBill);
+  const markBillPaidStore = useBillStore((state) => state.markBillPaid);
+  const billsHydrated = useBillStore((state) => state.isHydrated);
 
-        if (persistedData) {
-          console.log('Hydrating app state from persistence');
-          setTransactions(persistedData.transactions);
-          setGoals(persistedData.goals);
-          setBills(persistedData.bills);
-          setInsights(persistedData.insights);
-          if (persistedData.budgets) {
-            setBudgets(persistedData.budgets);
-          }
-          // User is not updatable in current design, keep mock user
-          setPreferences(persistedData.preferences);
-        } else {
-          console.log('No persisted data, using mock data');
-        }
+  // Insight store
+  const insights = useInsightStore((state) => state.insights);
+  const dismissInsight = useInsightStore((state) => state.dismissInsight);
+  const markInsightRead = useInsightStore((state) => state.markInsightRead);
+  const insightsHydrated = useInsightStore((state) => state.isHydrated);
 
-        setIsHydrated(true);
-      } catch (error) {
-        console.error('Hydration failed:', error);
-        setPersistenceError(error as Error);
-        setIsHydrated(true);
-      }
-    };
+  // Budget store
+  const budgets = useBudgetStore((state) => state.budgets);
+  const addBudget = useBudgetStore((state) => state.addBudget);
+  const updateBudget = useBudgetStore((state) => state.updateBudget);
+  const deleteBudget = useBudgetStore((state) => state.deleteBudget);
+  const budgetsHydrated = useBudgetStore((state) => state.isHydrated);
 
-    hydrate();
-  }, []); // Run once on mount
+  // User store
+  const user = useUserStore((state) => state.user);
+  const preferences = useUserStore((state) => state.preferences);
+  const updatePreferences = useUserStore((state) => state.updatePreferences);
+  const updateNotificationPreference = useUserStore((state) => state.updateNotificationPreference);
+  const userHydrated = useUserStore((state) => state.isHydrated);
 
-  // Auto-save on state changes (debounced, 1 second)
-  useDebouncedEffect(
-    () => {
-      if (!isHydrated) return; // Don't save during hydration
+  // === Computed Values ===
 
-      const currentState = {
-        transactions,
-        goals,
-        bills,
-        insights,
-        budgets,
-        user,
-        preferences,
-      };
+  // Hydration is complete when all stores are hydrated
+  const isHydrated = transactionsHydrated && goalsHydrated && billsHydrated && 
+                     insightsHydrated && budgetsHydrated && userHydrated;
 
-      savePersistedState(currentState).catch(error => {
-        console.error('Auto-save failed:', error);
-        setPersistenceError(error);
-      });
-    },
-    [transactions, goals, bills, insights, budgets, user, preferences, isHydrated],
-    1000
-  );
+  // Recurring transaction detection (memoized)
+  const recurringTransactionIds = useMemo(() => {
+    return getRecurringTransactionIds(transactions);
+  }, [transactions]);
 
-  // Transaction actions
-  const addTransaction = useCallback((transaction: Omit<Transaction, 'id'>) => {
-    const newTransaction: Transaction = {
-      ...transaction,
-      id: `tx_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-    };
-    setTransactions(prev => [newTransaction, ...prev]);
-  }, []);
+  const recurringPatterns = useMemo(() => {
+    return detectRecurringPatterns(transactions);
+  }, [transactions]);
 
-  const deleteTransaction = useCallback((id: string) => {
-    setTransactions(prev => prev.filter(t => t.id !== id));
-  }, []);
+  // Subscription detection (memoized)
+  const subscriptions = useMemo(() => {
+    return detectSubscriptions(transactions);
+  }, [transactions]);
 
-  const deleteTransactions = useCallback((ids: string[]) => {
-    const idsSet = new Set(ids);
-    setTransactions(prev => prev.filter(t => !idsSet.has(t.id)));
-  }, []);
+  const subscriptionOverlaps = useMemo(() => {
+    return detectOverlaps(subscriptions);
+  }, [subscriptions]);
 
-  const updateTransaction = useCallback((id: string, updates: TransactionUpdate) => {
-    setTransactions(prev =>
-      prev.map(t => t.id === id ? { ...t, ...updates, id: t.id } : t)
-    );
-  }, []);
+  const totalMonthlySubscriptions = useMemo(() => {
+    return subscriptions.reduce((sum, s) => sum + s.monthlyAmount, 0);
+  }, [subscriptions]);
 
-  // Goal actions
-  const addGoal = useCallback((goal: Omit<SavingsGoal, 'id'>) => {
-    const newGoal: SavingsGoal = {
-      ...goal,
-      id: `goal_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-    };
-    setGoals(prev => [...prev, newGoal]);
-  }, []);
+  const totalYearlySubscriptions = useMemo(() => {
+    return subscriptions.reduce((sum, s) => sum + s.yearlyAmount, 0);
+  }, [subscriptions]);
 
-  const updateGoal = useCallback((id: string, updates: Partial<SavingsGoal>) => {
-    setGoals(prev => prev.map(g => g.id === id ? { ...g, ...updates } : g));
-  }, []);
-
-  const deleteGoal = useCallback((id: string) => {
-    setGoals(prev => prev.filter(g => g.id !== id));
-  }, []);
-
-  // Bill actions
-  const addBill = useCallback(async (bill: NewBillInput) => {
-    // Validation
-    if (!bill.name.trim()) {
-      console.warn('Bill name is required');
-      return;
-    }
-    if (!bill.amount || bill.amount <= 0) {
-      console.warn('Bill amount must be positive');
-      return;
-    }
-    if (isNaN(new Date(bill.dueDate).getTime())) {
-      console.warn('Invalid due date');
-      return;
-    }
-
-    const newBill: Bill = {
-      name: bill.name.trim(),
-      amount: bill.amount,
-      dueDate: bill.dueDate,
-      isPaid: bill.isPaid ?? false,
-      status: getBillStatus(bill.dueDate, bill.isPaid),
-      id: `bill_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-    };
-
-    // Schedule reminder notifications if enabled
-    const reminderPrefs = preferences.billReminder ?? DEFAULT_BILL_REMINDER_PREFS;
-    if (reminderPrefs.enabled && !newBill.isPaid) {
-      try {
-        const notificationIds = await scheduleBillReminder(newBill, reminderPrefs);
-        if (notificationIds.length > 0) {
-          newBill.reminderNotificationIds = notificationIds;
-        }
-      } catch (error) {
-        console.warn('Failed to schedule bill reminder:', error);
-      }
-    }
-
-    // Sort bills by due date (earliest first)
-    setBills(prev => [...prev, newBill].sort((a, b) =>
-      new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime()
-    ));
-  }, [preferences.billReminder]);
-
-  const updateBill = useCallback(async (id: string, updates: UpdateBillPatch) => {
-    const billToUpdate = bills.find(b => b.id === id);
-    if (!billToUpdate) return;
-
-    // Cancel existing notifications if due date is changing or bill is being marked paid
-    if (billToUpdate.reminderNotificationIds?.length && (updates.dueDate || updates.isPaid)) {
-      await cancelNotifications(billToUpdate.reminderNotificationIds);
-    }
-
-    setBills(prev =>
-      prev.map(b => {
-        if (b.id !== id) return b;
-
-        // Apply updates and recompute status
-        const updated = { ...b, ...updates };
-        const newStatus = getBillStatus(updated.dueDate, updated.isPaid);
-        return { ...updated, status: newStatus, reminderNotificationIds: undefined };
-      })
-    );
-
-    // Reschedule notifications if due date changed and bill isn't paid
-    const reminderPrefs = preferences.billReminder ?? DEFAULT_BILL_REMINDER_PREFS;
-    if (updates.dueDate && reminderPrefs.enabled && !updates.isPaid && !billToUpdate.isPaid) {
-      try {
-        const updatedBill = { ...billToUpdate, ...updates, status: getBillStatus(updates.dueDate, billToUpdate.isPaid) };
-        const notificationIds = await scheduleBillReminder(updatedBill, reminderPrefs);
-        if (notificationIds.length > 0) {
-          setBills(prev => prev.map(b => b.id === id ? { ...b, reminderNotificationIds: notificationIds } : b));
-        }
-      } catch (error) {
-        console.warn('Failed to reschedule bill reminder:', error);
-      }
-    }
-  }, [bills, preferences.billReminder]);
-
-  const deleteBill = useCallback(async (id: string) => {
-    const billToDelete = bills.find(b => b.id === id);
-    
-    // Cancel any scheduled notifications for this bill
-    if (billToDelete?.reminderNotificationIds?.length) {
-      await cancelNotifications(billToDelete.reminderNotificationIds);
-    }
-    
-    setBills(prev => prev.filter(b => b.id !== id));
-  }, [bills]);
-
-  const markBillPaid = useCallback(async (id: string) => {
-    const billToMark = bills.find(b => b.id === id);
-    
-    // Cancel any scheduled notifications since bill is now paid
-    if (billToMark?.reminderNotificationIds?.length) {
-      await cancelNotifications(billToMark.reminderNotificationIds);
-    }
-    
-    setBills(prev =>
-      prev.map(b => {
-        if (b.id !== id) return b;
-        const updated = { ...b, isPaid: true, reminderNotificationIds: undefined };
-        return { ...updated, status: getBillStatus(updated.dueDate, true) };
-      })
-    );
-  }, [bills]);
-
-  // Insight actions
-  const dismissInsight = useCallback((id: string) => {
-    setInsights(prev => prev.filter(i => i.id !== id));
-  }, []);
-
-  const markInsightRead = useCallback((id: string) => {
-    setInsights(prev => prev.map(i => i.id === id ? { ...i, isRead: true } : i));
-  }, []);
-
-  // Budget actions
+  // Category spending calculator
   const getCategorySpending = useCallback((category: BudgetCategory): number => {
-    // Get current month's start and end
     const now = new Date();
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
     const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
@@ -336,111 +187,79 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     }));
   }, [budgets, getCategorySpending]);
 
-  // Recurring transaction detection
-  const recurringTransactionIds = useMemo(() => {
-    return getRecurringTransactionIds(transactions);
-  }, [transactions]);
+  // === Wrapper functions for bill operations (to pass reminder prefs) ===
+  
+  const addBill = useCallback((bill: NewBillInput) => {
+    addBillStore(bill, preferences.billReminder);
+  }, [addBillStore, preferences.billReminder]);
 
-  const recurringPatterns = useMemo(() => {
-    return detectRecurringPatterns(transactions);
-  }, [transactions]);
+  const updateBillAction = useCallback((id: string, updates: UpdateBillPatch) => {
+    updateBillStore(id, updates, preferences.billReminder);
+  }, [updateBillStore, preferences.billReminder]);
 
-  // Subscription detection
-  const subscriptions = useMemo(() => {
-    return detectSubscriptions(transactions);
-  }, [transactions]);
+  const deleteBill = useCallback((id: string) => {
+    deleteBillStore(id);
+  }, [deleteBillStore]);
 
-  const subscriptionOverlaps = useMemo(() => {
-    return detectOverlaps(subscriptions);
-  }, [subscriptions]);
+  const markBillPaid = useCallback((id: string) => {
+    markBillPaidStore(id);
+  }, [markBillPaidStore]);
 
-  const totalMonthlySubscriptions = useMemo(() => {
-    return subscriptions.reduce((sum, s) => sum + s.monthlyAmount, 0);
-  }, [subscriptions]);
+  // === Context Value ===
 
-  const totalYearlySubscriptions = useMemo(() => {
-    return subscriptions.reduce((sum, s) => sum + s.yearlyAmount, 0);
-  }, [subscriptions]);
-
-  const addBudget = useCallback((budget: NewBudgetInput) => {
-    // Check if budget for this category already exists
-    const exists = budgets.some(b => b.category === budget.category);
-    if (exists) {
-      console.warn(`Budget for category ${budget.category} already exists`);
-      return;
-    }
-
-    const newBudget: CategoryBudget = {
-      ...budget,
-      id: `budget_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-      currentSpent: 0, // Will be computed
-    };
-    setBudgets(prev => [...prev, newBudget]);
-  }, [budgets]);
-
-  const updateBudget = useCallback((id: string, updates: UpdateBudgetPatch) => {
-    setBudgets(prev => prev.map(b => b.id === id ? { ...b, ...updates } : b));
-  }, []);
-
-  const deleteBudget = useCallback((id: string) => {
-    setBudgets(prev => prev.filter(b => b.id !== id));
-  }, []);
-
-  // Preference actions
-  const updatePreferences = useCallback((updates: Partial<UserPreferences>) => {
-    setPreferences(prev => ({ ...prev, ...updates }));
-  }, []);
-
-  const updateNotificationPreference = useCallback((
-    key: keyof UserPreferences['notifications'], 
-    value: boolean
-  ) => {
-    setPreferences(prev => ({
-      ...prev,
-      notifications: {
-        ...prev.notifications,
-        [key]: value
-      }
-    }));
-  }, []);
-
-  // Memoize context value
   const value = useMemo(() => ({
+    // Transactions
     transactions,
     addTransaction,
     deleteTransaction,
     deleteTransactions,
     updateTransaction,
+    
+    // Recurring
     recurringTransactionIds,
     recurringPatterns,
+    
+    // Subscriptions
     subscriptions,
     subscriptionOverlaps,
     totalMonthlySubscriptions,
     totalYearlySubscriptions,
+    
+    // Goals
     goals,
     addGoal,
     updateGoal,
     deleteGoal,
+    
+    // Bills
     bills,
     addBill,
-    updateBill,
+    updateBill: updateBillAction,
     deleteBill,
     markBillPaid,
+    
+    // Insights
     insights,
     dismissInsight,
     markInsightRead,
+    
+    // Budgets
     budgets,
     addBudget,
     updateBudget,
     deleteBudget,
     getCategorySpending,
     budgetsWithSpending,
+    
+    // User
     user,
     preferences,
     updatePreferences,
     updateNotificationPreference,
+    
+    // Persistence state
     isHydrated,
-    persistenceError,
+    persistenceError: null, // Zustand handles errors internally
   }), [
     transactions,
     addTransaction,
@@ -459,7 +278,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     deleteGoal,
     bills,
     addBill,
-    updateBill,
+    updateBillAction,
     deleteBill,
     markBillPaid,
     insights,
@@ -476,7 +295,6 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     updatePreferences,
     updateNotificationPreference,
     isHydrated,
-    persistenceError,
   ]);
 
   return (
@@ -486,6 +304,10 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
   );
 };
 
+/**
+ * Hook to access app state and actions
+ * Maintains backward compatibility while using Zustand stores internally
+ */
 export const useApp = (): AppContextType => {
   const context = useContext(AppContext);
   if (context === undefined) {
