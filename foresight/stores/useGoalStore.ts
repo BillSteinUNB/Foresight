@@ -131,3 +131,8 @@ export const selectCompletedGoals = (state: GoalStore) =>
 
 export const selectActiveGoals = (state: GoalStore) =>
   state.goals.filter((g) => g.currentAmount < g.targetAmount);
+
+export const selectRemainingToSave = (state: GoalStore) =>
+  state.goals
+    .filter((g) => g.currentAmount < g.targetAmount)
+    .reduce((sum, g) => sum + (g.targetAmount - g.currentAmount), 0);

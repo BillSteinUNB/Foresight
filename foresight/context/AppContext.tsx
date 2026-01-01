@@ -2,6 +2,16 @@ import React, { createContext, useContext, useMemo, ReactNode, useCallback } fro
 import { Transaction, SavingsGoal, Bill, Insight, User, UserPreferences, TransactionUpdate, CategoryBudget, BudgetCategory, SubscriptionOverlap } from '../types';
 import { getRecurringTransactionIds, detectRecurringPatterns, RecurringPattern } from '../utils/recurring';
 import { detectSubscriptions, detectOverlaps, Subscription } from '../utils/subscriptions';
+import { calculateSafeToSpend, getSafeToSpendBreakdown } from '../utils/safeToSpend';
+import {
+  formatCurrency,
+  formatCurrencySimple,
+  convertCurrency,
+  convertAndFormat,
+  getExchangeRate,
+  SUPPORTED_CURRENCIES,
+  Currency,
+} from '../utils/currency';
 
 // Import Zustand stores
 import { useTransactionStore } from '../stores/useTransactionStore';
@@ -65,6 +75,24 @@ interface AppContextType {
   preferences: UserPreferences;
   updatePreferences: (updates: Partial<UserPreferences>) => void;
   updateNotificationPreference: (key: keyof UserPreferences['notifications'], value: boolean) => void;
+
+  // Safe-to-Spend
+  safeToSpend: number;
+  safeToSpendBreakdown: {
+    monthlyIncome: number;
+    unpaidBills: number;
+    recommendedSavings: number;
+    budgetedExpenses: number;
+    safeToSpend: number;
+  };
+
+  // Currency helpers
+  formatCurrency: (amount: number, currencyCode?: string) => string;
+  formatCurrencySimple: (amount: number, currencyCode?: string) => string;
+  convertCurrency: (amount: number, fromCurrency: string, toCurrency: string) => Promise<number>;
+  convertAndFormat: (amount: number, fromCurrency: string, toCurrency: string) => Promise<string>;
+  supportedCurrencies: Currency[];
+  currentCurrency: string;
 
   // Persistence state
   isHydrated: boolean;
@@ -187,6 +215,86 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     }));
   }, [budgets, getCategorySpending]);
 
+  // === Safe-to-Spend Calculation ===
+  
+  // Calculate monthly income
+  const now = useMemo(() => new Date(), []);
+  const startOfMonth = useMemo(() => new Date(now.getFullYear(), now.getMonth(), 1), [now]);
+  const endOfMonth = useMemo(() => new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59), [now]);
+  
+  const monthlyIncome = useMemo(() => {
+    return transactions
+      .filter(t => {
+        const txDate = new Date(t.date);
+        return t.type === 'income' && txDate >= startOfMonth && txDate <= endOfMonth;
+      })
+      .reduce((sum, t) => sum + t.amount, 0);
+  }, [transactions, startOfMonth, endOfMonth]);
+  
+  // Calculate unpaid bills
+  const unpaidBills = useMemo(() => {
+    return bills.filter(b => !b.isPaid).reduce((sum, b) => sum + b.amount, 0);
+  }, [bills]);
+  
+  // Calculate remaining to save for goals
+  const remainingToSave = useMemo(() => {
+    return goals
+      .filter(g => g.currentAmount < g.targetAmount)
+      .reduce((sum, g) => sum + (g.targetAmount - g.currentAmount), 0);
+  }, [goals]);
+  
+  const recommendedSavings = useMemo(() => remainingToSave / 12, [remainingToSave]);
+  
+  // Calculate total budgeted expenses
+  const budgetedExpenses = useMemo(() => {
+    return budgets.filter(b => b.isActive).reduce((sum, b) => sum + b.monthlyLimit, 0);
+  }, [budgets]);
+  
+  // Calculate safe-to-spend
+  const safeToSpend = useMemo(() => {
+    return calculateSafeToSpend(monthlyIncome, unpaidBills, recommendedSavings, budgetedExpenses);
+  }, [monthlyIncome, unpaidBills, recommendedSavings, budgetedExpenses]);
+  
+  const safeToSpendBreakdown = useMemo(() => ({
+    monthlyIncome,
+    unpaidBills,
+    recommendedSavings,
+    budgetedExpenses,
+    safeToSpend,
+  }), [monthlyIncome, unpaidBills, recommendedSavings, budgetedExpenses, safeToSpend]);
+
+  // Current currency
+  const currentCurrency = useMemo(() => preferences.currency, [preferences.currency]);
+
+  // Currency helper functions
+  const formatCurrencyFn = useCallback(
+    (amount: number, currencyCode?: string) => {
+      return formatCurrency(amount, currencyCode || currentCurrency);
+    },
+    [currentCurrency]
+  );
+
+  const formatCurrencySimpleFn = useCallback(
+    (amount: number, currencyCode?: string) => {
+      return formatCurrencySimple(amount, currencyCode || currentCurrency);
+    },
+    [currentCurrency]
+  );
+
+  const convertCurrencyFn = useCallback(
+    async (amount: number, fromCurrency: string, toCurrency: string) => {
+      return convertCurrency(amount, fromCurrency, toCurrency);
+    },
+    []
+  );
+
+  const convertAndFormatFn = useCallback(
+    async (amount: number, fromCurrency: string, toCurrency: string) => {
+      return convertAndFormat(amount, fromCurrency, toCurrency);
+    },
+    []
+  );
+
   // === Wrapper functions for bill operations (to pass reminder prefs) ===
   
   const addBill = useCallback((bill: NewBillInput) => {
@@ -257,6 +365,18 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     updatePreferences,
     updateNotificationPreference,
     
+    // Safe-to-Spend
+    safeToSpend,
+    safeToSpendBreakdown,
+    
+    // Currency helpers
+    formatCurrency: formatCurrencyFn,
+    formatCurrencySimple: formatCurrencySimpleFn,
+    convertCurrency: convertCurrencyFn,
+    convertAndFormat: convertAndFormatFn,
+    supportedCurrencies: SUPPORTED_CURRENCIES,
+    currentCurrency,
+    
     // Persistence state
     isHydrated,
     persistenceError: null, // Zustand handles errors internally
@@ -294,6 +414,9 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     preferences,
     updatePreferences,
     updateNotificationPreference,
+    safeToSpend,
+    safeToSpendBreakdown,
+    currentCurrency,
     isHydrated,
   ]);
 
