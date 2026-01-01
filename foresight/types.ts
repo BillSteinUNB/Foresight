@@ -21,6 +21,8 @@ export interface Transaction {
   status?: 'pending' | 'completed';
   notes?: string;
   receiptUri?: string; // Local file:// URI for receipt image
+  isRecurring?: boolean; // Flag indicating this is part of a recurring pattern
+  recurringGroupId?: string; // ID linking related recurring transactions
 }
 
 // Update type that excludes id (can't change id during edit)
@@ -174,4 +176,31 @@ export interface TrendPoint {
   endDate: string;       // ISO
   totalExpense: number;
   byCategory: Partial<Record<BudgetCategory, number>>;
+}
+
+// === Subscription Types ===
+
+export type RecurringFrequency = 'weekly' | 'biweekly' | 'monthly' | 'quarterly' | 'yearly';
+
+export interface DetectedSubscription {
+  id: string;
+  merchantName: string;
+  category: BudgetCategory;
+  monthlyAmount: number;
+  yearlyAmount: number;
+  frequency: RecurringFrequency;
+  nextBillingDate: string;
+  transactionCount: number;
+  lastChargeDate: string;
+  lastChargeAmount: number;
+  confidence: number;
+  status: 'active' | 'cancelled' | 'paused';
+  tags: string[];
+}
+
+export interface SubscriptionOverlap {
+  category: string;
+  subscriptions: DetectedSubscription[];
+  potentialSavings: number;
+  description: string;
 }

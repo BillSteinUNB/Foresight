@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useCallback, useMemo, ReactNode, useEffect } from 'react';
-import { Transaction, SavingsGoal, Bill, Insight, User, UserPreferences, TransactionUpdate, CategoryBudget, BudgetCategory, BillReminderPreferences } from '../types';
+import { Transaction, SavingsGoal, Bill, Insight, User, UserPreferences, TransactionUpdate, CategoryBudget, BudgetCategory, BillReminderPreferences, DetectedSubscription, SubscriptionOverlap } from '../types';
 import {
   TRANSACTIONS as INITIAL_TRANSACTIONS,
   GOALS as INITIAL_GOALS,
@@ -12,6 +12,8 @@ import { loadPersistedState, savePersistedState } from '../utils/persistence';
 import { useDebouncedEffect } from '../utils/useDebouncedEffect';
 import { getBillStatus } from '../utils/billUtils';
 import { scheduleBillReminder, cancelNotifications, DEFAULT_BILL_REMINDER_PREFS } from '../utils/notifications';
+import { getRecurringTransactionIds, detectRecurringPatterns, RecurringPattern } from '../utils/recurring';
+import { detectSubscriptions, detectOverlaps, Subscription } from '../utils/subscriptions';
 
 type NewBillInput = Omit<Bill, 'id' | 'status' | 'isPaid'> & { isPaid?: boolean };
 type UpdateBillPatch = Partial<Pick<Bill, 'name' | 'amount' | 'dueDate' | 'isPaid'>>;
@@ -25,6 +27,16 @@ interface AppContextType {
   deleteTransaction: (id: string) => void;
   deleteTransactions: (ids: string[]) => void;
   updateTransaction: (id: string, updates: TransactionUpdate) => void;
+
+  // Recurring Transactions
+  recurringTransactionIds: Set<string>;
+  recurringPatterns: RecurringPattern[];
+
+  // Subscriptions
+  subscriptions: Subscription[];
+  subscriptionOverlaps: SubscriptionOverlap[];
+  totalMonthlySubscriptions: number;
+  totalYearlySubscriptions: number;
 
   // Goals
   goals: SavingsGoal[];
@@ -324,6 +336,32 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     }));
   }, [budgets, getCategorySpending]);
 
+  // Recurring transaction detection
+  const recurringTransactionIds = useMemo(() => {
+    return getRecurringTransactionIds(transactions);
+  }, [transactions]);
+
+  const recurringPatterns = useMemo(() => {
+    return detectRecurringPatterns(transactions);
+  }, [transactions]);
+
+  // Subscription detection
+  const subscriptions = useMemo(() => {
+    return detectSubscriptions(transactions);
+  }, [transactions]);
+
+  const subscriptionOverlaps = useMemo(() => {
+    return detectOverlaps(subscriptions);
+  }, [subscriptions]);
+
+  const totalMonthlySubscriptions = useMemo(() => {
+    return subscriptions.reduce((sum, s) => sum + s.monthlyAmount, 0);
+  }, [subscriptions]);
+
+  const totalYearlySubscriptions = useMemo(() => {
+    return subscriptions.reduce((sum, s) => sum + s.yearlyAmount, 0);
+  }, [subscriptions]);
+
   const addBudget = useCallback((budget: NewBudgetInput) => {
     // Check if budget for this category already exists
     const exists = budgets.some(b => b.category === budget.category);
@@ -373,6 +411,12 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     deleteTransaction,
     deleteTransactions,
     updateTransaction,
+    recurringTransactionIds,
+    recurringPatterns,
+    subscriptions,
+    subscriptionOverlaps,
+    totalMonthlySubscriptions,
+    totalYearlySubscriptions,
     goals,
     addGoal,
     updateGoal,
@@ -403,6 +447,12 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     deleteTransaction,
     deleteTransactions,
     updateTransaction,
+    recurringTransactionIds,
+    recurringPatterns,
+    subscriptions,
+    subscriptionOverlaps,
+    totalMonthlySubscriptions,
+    totalYearlySubscriptions,
     goals,
     addGoal,
     updateGoal,

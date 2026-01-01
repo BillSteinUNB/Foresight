@@ -11,11 +11,13 @@ import Activity from '../screens/Activity';
 import Insights from '../screens/Insights';
 import Profile from '../screens/Profile';
 import SpendingTrends from '../screens/SpendingTrends';
+import Subscriptions from '../screens/Subscriptions';
 import { colors, spacing, borderRadius } from '../theme';
 
 export type InsightsStackParamList = {
   InsightsMain: undefined;
   SpendingTrends: undefined;
+  Subscriptions: undefined;
 };
 
 export type TabParamList = {
@@ -38,6 +40,7 @@ const InsightsStackScreen = () => (
   >
     <InsightsStack.Screen name="InsightsMain" component={Insights} />
     <InsightsStack.Screen name="SpendingTrends" component={SpendingTrends} />
+    <InsightsStack.Screen name="Subscriptions" component={Subscriptions} />
   </InsightsStack.Navigator>
 );
 

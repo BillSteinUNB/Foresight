@@ -30,7 +30,13 @@
     },
     "plugins": [
       "expo-asset",
-      "expo-font"
+      "expo-font",
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Allow Foresight to use Face ID to secure your financial data."
+        }
+      ]
     ]
   }
 }

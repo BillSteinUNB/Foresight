@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator, Alert } from 'react-native';
 import { MotiView, AnimatePresence } from 'moti';
 import { Ionicons } from '@expo/vector-icons';
@@ -12,6 +12,7 @@ import { exportData, ExportFormat } from '../utils/exportData';
 import { colors, spacing, borderRadius, typography, commonStyles } from '../theme';
 import { DEFAULT_BILL_REMINDER_PREFS } from '../utils/notifications';
 import { BillReminderPreferences } from '../types';
+import { canUseBiometrics, authenticate, checkBiometricCapability, getBiometricTypeName } from '../utils/biometrics';
 
 interface MenuItemProps {
   icon: keyof typeof Ionicons.glyphMap;
@@ -174,6 +175,56 @@ const Profile: React.FC = () => {
   const [isExporting, setIsExporting] = useState(false);
   const [exportSuccess, setExportSuccess] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
+  const [biometricAvailable, setBiometricAvailable] = useState(false);
+  const [biometricName, setBiometricName] = useState('Biometrics');
+
+  // Check biometric availability on mount
+  useEffect(() => {
+    const checkBiometrics = async () => {
+      const capability = await checkBiometricCapability();
+      setBiometricAvailable(capability.isAvailable && capability.isEnrolled);
+      setBiometricName(getBiometricTypeName(capability.biometricTypes));
+    };
+    checkBiometrics();
+  }, []);
+
+  const handleBiometricToggle = useCallback(async () => {
+    // If trying to enable biometrics
+    if (!preferences.biometricEnabled) {
+      // First check if available
+      const isAvailable = await canUseBiometrics();
+      if (!isAvailable) {
+        Alert.alert(
+          'Biometrics Unavailable',
+          'Please set up Face ID or Touch ID in your device settings first.',
+          [{ text: 'OK' }]
+        );
+        return;
+      }
+
+      // Verify with biometric before enabling
+      const result = await authenticate({
+        promptMessage: `Enable ${biometricName} for Foresight`,
+      });
+
+      if (result.success) {
+        updatePreferences({ biometricEnabled: true });
+      } else if (result.error && result.error !== 'Authentication cancelled') {
+        Alert.alert('Authentication Failed', result.error);
+      }
+    } else {
+      // Disabling - confirm with biometric first
+      const result = await authenticate({
+        promptMessage: `Disable ${biometricName} for Foresight`,
+      });
+
+      if (result.success) {
+        updatePreferences({ biometricEnabled: false });
+      } else if (result.error && result.error !== 'Authentication cancelled') {
+        Alert.alert('Authentication Failed', result.error);
+      }
+    }
+  }, [preferences.biometricEnabled, biometricName, updatePreferences]);
 
   const handleExportData = useCallback(async (format: ExportFormat = 'json') => {
     setIsExporting(true);
@@ -291,9 +342,9 @@ const Profile: React.FC = () => {
             />
             <ToggleItem
               icon="finger-print-outline"
-              label="Biometric Login"
+              label={biometricAvailable ? `${biometricName} Login` : 'Biometric Login'}
               enabled={preferences.biometricEnabled}
-              onToggle={() => updatePreferences({ biometricEnabled: !preferences.biometricEnabled })}
+              onToggle={handleBiometricToggle}
             />
           </View>
         </View>

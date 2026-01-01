@@ -48,7 +48,7 @@ const FilterChip: React.FC<FilterChipProps> = ({ label, active, onPress }) => (
 
 const Activity: React.FC = () => {
   const insets = useSafeAreaInsets();
-  const { transactions, deleteTransactions } = useApp();
+  const { transactions, deleteTransactions, recurringTransactionIds } = useApp();
   const [filter, setFilter] = useState<FilterType>('all');
   const [dateRange, setDateRange] = useState<DateRangeType>('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -443,6 +443,7 @@ const Activity: React.FC = () => {
                       selectionMode={selectionMode}
                       selected={selectedIds.has(t.id)}
                       onToggleSelected={() => toggleSelection(t.id)}
+                      isRecurring={recurringTransactionIds.has(t.id)}
                     />
                   ))}
                 </View>

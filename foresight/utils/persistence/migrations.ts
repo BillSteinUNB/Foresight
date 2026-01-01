@@ -28,6 +28,18 @@ export const migrations: Record<number, (state: PersistedAppState) => PersistedA
       },
     };
   },
+
+  // Migration from v2 to v3: Add isRecurring/recurringGroupId to transactions
+  2: (state) => {
+    return {
+      ...state,
+      transactions: state.transactions.map(tx => ({
+        ...tx,
+        isRecurring: (tx as any).isRecurring ?? undefined,
+        recurringGroupId: (tx as any).recurringGroupId ?? undefined,
+      })),
+    };
+  },
 };
 
 /**

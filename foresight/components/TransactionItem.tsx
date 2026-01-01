@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Transaction } from '../types';
 import { formatCurrency, getCategoryIcon } from '../utils';
 import { colors, spacing, borderRadius, typography, commonStyles } from '../theme';
+import RecurringBadge from './RecurringBadge';
 
 interface Props {
   transaction: Transaction;
@@ -13,6 +14,7 @@ interface Props {
   selectionMode?: boolean;
   selected?: boolean;
   onToggleSelected?: () => void;
+  isRecurring?: boolean;
 }
 
 const TransactionItem: React.FC<Props> = ({ 
@@ -22,6 +24,7 @@ const TransactionItem: React.FC<Props> = ({
   selectionMode = false,
   selected = false,
   onToggleSelected,
+  isRecurring = false,
 }) => {
   const isExpense = transaction.type === 'expense';
 
@@ -86,9 +89,12 @@ const TransactionItem: React.FC<Props> = ({
 
       {/* Amount */}
       <View style={styles.amountContainer}>
-        <Text style={[styles.amount, !isExpense && styles.incomeAmount]}>
-          {isExpense ? '-' : '+'}{formatCurrency(transaction.amount)}
-        </Text>
+        <View style={styles.amountRow}>
+          {isRecurring && <RecurringBadge size="small" />}
+          <Text style={[styles.amount, !isExpense && styles.incomeAmount]}>
+            {isExpense ? '-' : '+'}{formatCurrency(transaction.amount)}
+          </Text>
+        </View>
         {transaction.status === 'pending' && (
           <Text style={styles.pendingLabel}>PENDING</Text>
         )}
@@ -169,6 +175,11 @@ const styles = StyleSheet.create({
   },
   amountContainer: {
     alignItems: 'flex-end',
+  },
+  amountRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[2],
   },
   amount: {
     fontSize: typography.fontSizes.base,

@@ -23,7 +23,7 @@ export type PersistedEnvelope = {
 };
 
 // Current schema version - increment when making breaking changes
-export const PERSISTENCE_SCHEMA_VERSION = 2;
+export const PERSISTENCE_SCHEMA_VERSION = 3;
 
 // AsyncStorage key
 export const STORAGE_KEY = '@foresight/appState';

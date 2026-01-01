@@ -185,6 +185,14 @@ const Insights: React.FC = () => {
             </TouchableOpacity>
             <TouchableOpacity 
               style={styles.headerBtn}
+              onPress={() => navigation.navigate('Subscriptions')}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="refresh-outline" size={18} color={colors.mint} />
+              <Text style={styles.headerBtnText}>Subs</Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={styles.headerBtn}
               onPress={() => setShowBudgetManager(true)}
               activeOpacity={0.7}
             >

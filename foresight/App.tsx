@@ -1,6 +1,6 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
-import { StyleSheet, View, Text, ActivityIndicator } from 'react-native';
+import { StyleSheet, View, Text, ActivityIndicator, AppState, AppStateStatus } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -8,12 +8,52 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { AppProvider, useApp } from './context/AppContext';
 import TabNavigator from './navigation/TabNavigator';
 import AddTransaction from './components/AddTransaction';
+import BiometricLock from './components/BiometricLock';
 import { Transaction } from './types';
 import { colors, spacing, typography } from './theme';
+import { canUseBiometrics } from './utils/biometrics';
 
 const AppContent: React.FC = () => {
-  const { addTransaction, updateTransaction, isHydrated } = useApp();
+  const { addTransaction, updateTransaction, isHydrated, preferences } = useApp();
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [isLocked, setIsLocked] = useState(true);
+  const [biometricAvailable, setBiometricAvailable] = useState(false);
+
+  // Check if biometrics are available and enabled
+  useEffect(() => {
+    const checkBiometrics = async () => {
+      if (preferences.biometricEnabled) {
+        const available = await canUseBiometrics();
+        setBiometricAvailable(available);
+        // If biometrics enabled and available, show lock screen
+        setIsLocked(available);
+      } else {
+        // Biometrics disabled, skip lock
+        setIsLocked(false);
+        setBiometricAvailable(false);
+      }
+    };
+
+    if (isHydrated) {
+      checkBiometrics();
+    }
+  }, [isHydrated, preferences.biometricEnabled]);
+
+  // Lock app when it goes to background (if biometric is enabled)
+  useEffect(() => {
+    const handleAppStateChange = (nextAppState: AppStateStatus) => {
+      if (nextAppState === 'background' && preferences.biometricEnabled && biometricAvailable) {
+        setIsLocked(true);
+      }
+    };
+
+    const subscription = AppState.addEventListener('change', handleAppStateChange);
+    return () => subscription?.remove();
+  }, [preferences.biometricEnabled, biometricAvailable]);
+
+  const handleUnlock = useCallback(() => {
+    setIsLocked(false);
+  }, []);
 
   const handleAddTransaction = useCallback((newTx: Partial<Transaction>) => {
     addTransaction({
@@ -72,6 +112,14 @@ const AppContent: React.FC = () => {
         onAdd={handleAddTransaction}
         onUpdate={updateTransaction}
       />
+
+      {/* Biometric Lock Screen */}
+      {preferences.biometricEnabled && biometricAvailable && (
+        <BiometricLock
+          isLocked={isLocked}
+          onUnlock={handleUnlock}
+        />
+      )}
     </View>
   );
 };
