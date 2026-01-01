@@ -1,7 +1,6 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { SavingsGoal } from '../types';
-import { GOALS as INITIAL_GOALS } from '../mockData';
 import { zustandStorage, getStorageKey } from './storage';
 
 interface GoalState {
@@ -16,6 +15,7 @@ interface GoalActions {
   depositToGoal: (id: string, amount: number) => void;
   withdrawFromGoal: (id: string, amount: number) => void;
   setGoals: (goals: SavingsGoal[]) => void;
+  loadDemoData: () => void;
   reset: () => void;
   setHydrated: (hydrated: boolean) => void;
 }
@@ -29,8 +29,8 @@ const generateId = (): string => {
 export const useGoalStore = create<GoalStore>()(
   persist(
     (set, get) => ({
-      // State
-      goals: [...INITIAL_GOALS],
+      // State - initialize with empty array for new users
+      goals: [],
       isHydrated: false,
 
       // Actions
@@ -82,8 +82,15 @@ export const useGoalStore = create<GoalStore>()(
         set({ goals });
       },
 
+      loadDemoData: () => {
+        // Dynamically import mock data only when needed for demo mode
+        import('../mockData').then(({ GOALS }) => {
+          set({ goals: [...GOALS] });
+        });
+      },
+
       reset: () => {
-        set({ goals: [...INITIAL_GOALS] });
+        set({ goals: [] });
       },
 
       setHydrated: (hydrated) => {

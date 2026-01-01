@@ -12,7 +12,28 @@ import Insights from '../screens/Insights';
 import Profile from '../screens/Profile';
 import SpendingTrends from '../screens/SpendingTrends';
 import Subscriptions from '../screens/Subscriptions';
+import ErrorBoundary from '../components/ErrorBoundary';
 import { colors, spacing, borderRadius } from '../theme';
+
+// Higher-order component to wrap screens with ErrorBoundary
+const withErrorBoundary = <P extends object>(
+  WrappedComponent: React.ComponentType<P>,
+  screenName: string
+) => {
+  return (props: P) => (
+    <ErrorBoundary name={screenName}>
+      <WrappedComponent {...props} />
+    </ErrorBoundary>
+  );
+};
+
+// Wrapped screen components
+const DashboardScreen = withErrorBoundary(Dashboard, 'Dashboard');
+const ActivityScreen = withErrorBoundary(Activity, 'Activity');
+const InsightsScreen = withErrorBoundary(Insights, 'Insights');
+const ProfileScreen = withErrorBoundary(Profile, 'Profile');
+const SpendingTrendsScreen = withErrorBoundary(SpendingTrends, 'Spending Trends');
+const SubscriptionsScreen = withErrorBoundary(Subscriptions, 'Subscriptions');
 
 export type InsightsStackParamList = {
   InsightsMain: undefined;
@@ -38,9 +59,9 @@ const InsightsStackScreen = () => (
       headerShown: false,
     }}
   >
-    <InsightsStack.Screen name="InsightsMain" component={Insights} />
-    <InsightsStack.Screen name="SpendingTrends" component={SpendingTrends} />
-    <InsightsStack.Screen name="Subscriptions" component={Subscriptions} />
+    <InsightsStack.Screen name="InsightsMain" component={InsightsScreen} />
+    <InsightsStack.Screen name="SpendingTrends" component={SpendingTrendsScreen} />
+    <InsightsStack.Screen name="Subscriptions" component={SubscriptionsScreen} />
   </InsightsStack.Navigator>
 );
 
@@ -138,11 +159,11 @@ const TabNavigator: React.FC<TabNavigatorProps> = ({ onAddPress }) => {
       }}
       tabBar={(props) => <CustomTabBar {...props} onAddPress={onAddPress} />}
     >
-      <Tab.Screen name="Home" component={Dashboard} />
-      <Tab.Screen name="Activity" component={Activity} />
+      <Tab.Screen name="Home" component={DashboardScreen} />
+      <Tab.Screen name="Activity" component={ActivityScreen} />
       <Tab.Screen name="Add" component={AddPlaceholder} />
       <Tab.Screen name="Insights" component={InsightsStackScreen} />
-      <Tab.Screen name="Profile" component={Profile} />
+      <Tab.Screen name="Profile" component={ProfileScreen} />
     </Tab.Navigator>
   );
 };

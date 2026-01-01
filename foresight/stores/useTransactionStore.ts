@@ -1,7 +1,6 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { Transaction, TransactionUpdate } from '../types';
-import { TRANSACTIONS as INITIAL_TRANSACTIONS } from '../mockData';
 import { zustandStorage, getStorageKey } from './storage';
 
 interface TransactionState {
@@ -15,6 +14,7 @@ interface TransactionActions {
   deleteTransactions: (ids: string[]) => void;
   updateTransaction: (id: string, updates: TransactionUpdate) => void;
   setTransactions: (transactions: Transaction[]) => void;
+  loadDemoData: () => void;
   reset: () => void;
   setHydrated: (hydrated: boolean) => void;
 }
@@ -28,8 +28,8 @@ const generateId = (): string => {
 export const useTransactionStore = create<TransactionStore>()(
   persist(
     (set, get) => ({
-      // State
-      transactions: [...INITIAL_TRANSACTIONS],
+      // State - initialize with empty array for new users
+      transactions: [],
       isHydrated: false,
 
       // Actions
@@ -68,8 +68,15 @@ export const useTransactionStore = create<TransactionStore>()(
         set({ transactions });
       },
 
+      loadDemoData: () => {
+        // Dynamically import mock data only when needed for demo mode
+        import('../mockData').then(({ TRANSACTIONS }) => {
+          set({ transactions: [...TRANSACTIONS] });
+        });
+      },
+
       reset: () => {
-        set({ transactions: [...INITIAL_TRANSACTIONS] });
+        set({ transactions: [] });
       },
 
       setHydrated: (hydrated) => {

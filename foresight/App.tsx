@@ -9,6 +9,7 @@ import { AppProvider, useApp } from './context/AppContext';
 import TabNavigator from './navigation/TabNavigator';
 import AddTransaction from './components/AddTransaction';
 import BiometricLock from './components/BiometricLock';
+import ErrorBoundary from './components/ErrorBoundary';
 import { Transaction } from './types';
 import { colors, spacing, typography } from './theme';
 import { canUseBiometrics } from './utils/biometrics';
@@ -128,9 +129,11 @@ const App: React.FC = () => {
   return (
     <GestureHandlerRootView style={styles.container}>
       <SafeAreaProvider>
-        <AppProvider>
-          <AppContent />
-        </AppProvider>
+        <ErrorBoundary name="Root">
+          <AppProvider>
+            <AppContent />
+          </AppProvider>
+        </ErrorBoundary>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );

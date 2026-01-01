@@ -16,14 +16,29 @@
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.foresight.app"
+      "bundleIdentifier": "com.foresight.app",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Foresight needs access to your camera to capture receipt photos for expense tracking.",
+        "NSPhotoLibraryUsageDescription": "Foresight needs access to your photo library to attach receipt images to transactions.",
+        "NSPhotoLibraryAddUsageDescription": "Foresight needs permission to save receipt photos to your photo library."
+      }
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#000000"
       },
-      "package": "com.foresight.app"
+      "package": "com.foresight.app",
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.USE_BIOMETRIC",
+        "android.permission.USE_FINGERPRINT",
+        "android.permission.RECEIVE_BOOT_COMPLETED",
+        "android.permission.VIBRATE",
+        "android.permission.SCHEDULE_EXACT_ALARM"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -35,6 +50,21 @@
         "expo-local-authentication",
         {
           "faceIDPermission": "Allow Foresight to use Face ID to secure your financial data."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#00D9A5",
+          "sounds": []
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Foresight needs access to your photos to attach receipt images to transactions.",
+          "cameraPermission": "Foresight needs access to your camera to capture receipt photos."
         }
       ]
     ]

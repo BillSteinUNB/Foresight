@@ -80,3 +80,41 @@ export {
   selectCurrency,
   selectLocale,
 } from './useUserStore';
+
+/**
+ * Load demo data into all stores.
+ * Useful for testing, demos, or a "Demo Mode" toggle.
+ */
+export const loadAllDemoData = (): void => {
+  const { useTransactionStore } = require('./useTransactionStore');
+  const { useGoalStore } = require('./useGoalStore');
+  const { useBillStore } = require('./useBillStore');
+  const { useInsightStore } = require('./useInsightStore');
+  const { useUserStore } = require('./useUserStore');
+
+  useTransactionStore.getState().loadDemoData();
+  useGoalStore.getState().loadDemoData();
+  useBillStore.getState().loadDemoData();
+  useInsightStore.getState().loadDemoData();
+  useUserStore.getState().loadDemoData();
+};
+
+/**
+ * Reset all stores to empty/default state.
+ * Clears all user data.
+ */
+export const resetAllStores = (): void => {
+  const { useTransactionStore } = require('./useTransactionStore');
+  const { useGoalStore } = require('./useGoalStore');
+  const { useBillStore } = require('./useBillStore');
+  const { useInsightStore } = require('./useInsightStore');
+  const { useBudgetStore } = require('./useBudgetStore');
+  const { useUserStore } = require('./useUserStore');
+
+  useTransactionStore.getState().reset();
+  useGoalStore.getState().reset();
+  useBillStore.getState().reset();
+  useInsightStore.getState().reset();
+  useBudgetStore.getState().reset();
+  useUserStore.getState().reset();
+};

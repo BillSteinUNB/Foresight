@@ -1,7 +1,6 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { Bill, BillReminderPreferences } from '../types';
-import { BILLS as INITIAL_BILLS } from '../mockData';
 import { zustandStorage, getStorageKey } from './storage';
 import { getBillStatus } from '../utils/billUtils';
 import { scheduleBillReminder, cancelNotifications, DEFAULT_BILL_REMINDER_PREFS } from '../utils/notifications';
@@ -20,6 +19,7 @@ interface BillActions {
   deleteBill: (id: string) => Promise<void>;
   markBillPaid: (id: string) => Promise<void>;
   setBills: (bills: Bill[]) => void;
+  loadDemoData: () => void;
   reset: () => void;
   setHydrated: (hydrated: boolean) => void;
 }
@@ -33,8 +33,8 @@ const generateId = (): string => {
 export const useBillStore = create<BillStore>()(
   persist(
     (set, get) => ({
-      // State
-      bills: [...INITIAL_BILLS],
+      // State - initialize with empty array for new users
+      bills: [],
       isHydrated: false,
 
       // Actions
@@ -161,8 +161,15 @@ export const useBillStore = create<BillStore>()(
         set({ bills });
       },
 
+      loadDemoData: () => {
+        // Dynamically import mock data only when needed for demo mode
+        import('../mockData').then(({ BILLS }) => {
+          set({ bills: [...BILLS] });
+        });
+      },
+
       reset: () => {
-        set({ bills: [...INITIAL_BILLS] });
+        set({ bills: [] });
       },
 
       setHydrated: (hydrated) => {

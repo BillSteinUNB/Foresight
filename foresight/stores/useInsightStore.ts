@@ -1,7 +1,6 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { Insight } from '../types';
-import { INSIGHTS as INITIAL_INSIGHTS } from '../mockData';
 import { zustandStorage, getStorageKey } from './storage';
 
 interface InsightState {
@@ -16,6 +15,7 @@ interface InsightActions {
   markAllRead: () => void;
   clearAllInsights: () => void;
   setInsights: (insights: Insight[]) => void;
+  loadDemoData: () => void;
   reset: () => void;
   setHydrated: (hydrated: boolean) => void;
 }
@@ -29,8 +29,8 @@ const generateId = (): string => {
 export const useInsightStore = create<InsightStore>()(
   persist(
     (set, get) => ({
-      // State
-      insights: [...INITIAL_INSIGHTS],
+      // State - initialize with empty array for new users
+      insights: [],
       isHydrated: false,
 
       // Actions
@@ -73,8 +73,15 @@ export const useInsightStore = create<InsightStore>()(
         set({ insights });
       },
 
+      loadDemoData: () => {
+        // Dynamically import mock data only when needed for demo mode
+        import('../mockData').then(({ INSIGHTS }) => {
+          set({ insights: [...INSIGHTS] });
+        });
+      },
+
       reset: () => {
-        set({ insights: [...INITIAL_INSIGHTS] });
+        set({ insights: [] });
       },
 
       setHydrated: (hydrated) => {
