@@ -1,5 +1,7 @@
 import React, { useCallback } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Image } from 'react-native';
+import { MotiView } from 'moti';
+import { Ionicons } from '@expo/vector-icons';
 import { Transaction } from '../types';
 import { formatCurrency, getCategoryIcon } from '../utils';
 import { colors, spacing, borderRadius, typography, commonStyles } from '../theme';
@@ -7,18 +9,53 @@ import { colors, spacing, borderRadius, typography, commonStyles } from '../them
 interface Props {
   transaction: Transaction;
   onPress: () => void;
+  onLongPress?: () => void;
+  selectionMode?: boolean;
+  selected?: boolean;
+  onToggleSelected?: () => void;
 }
 
-const TransactionItem: React.FC<Props> = ({ transaction, onPress }) => {
+const TransactionItem: React.FC<Props> = ({ 
+  transaction, 
+  onPress, 
+  onLongPress,
+  selectionMode = false,
+  selected = false,
+  onToggleSelected,
+}) => {
   const isExpense = transaction.type === 'expense';
+
+  const handlePress = () => {
+    if (selectionMode && onToggleSelected) {
+      onToggleSelected();
+    } else {
+      onPress();
+    }
+  };
 
   return (
     <TouchableOpacity
-      onPress={onPress}
-      style={styles.container}
+      onPress={handlePress}
+      onLongPress={onLongPress}
+      style={[styles.container, selected && styles.selectedContainer]}
       activeOpacity={0.7}
     >
-      <View style={commonStyles.row}>
+      {/* Selection Checkbox */}
+      {selectionMode && (
+        <MotiView
+          from={{ opacity: 0, scale: 0.8 }}
+          animate={{ opacity: 1, scale: 1 }}
+          style={styles.checkboxContainer}
+        >
+          <View style={[styles.checkbox, selected && styles.checkboxSelected]}>
+            {selected && (
+              <Ionicons name="checkmark" size={14} color={colors.black} />
+            )}
+          </View>
+        </MotiView>
+      )}
+
+      <View style={[commonStyles.row, { flex: 1 }]}>
         {/* Icon/Logo */}
         <View style={styles.iconContainer}>
           {transaction.merchantLogo ? (
@@ -69,6 +106,25 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(17, 17, 17, 0.5)',
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(26, 26, 26, 0.3)',
+  },
+  selectedContainer: {
+    backgroundColor: 'rgba(0, 217, 165, 0.1)',
+  },
+  checkboxContainer: {
+    marginRight: spacing[3],
+  },
+  checkbox: {
+    width: 22,
+    height: 22,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: colors.neutral500,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  checkboxSelected: {
+    backgroundColor: colors.mint,
+    borderColor: colors.mint,
   },
   iconContainer: {
     width: 40,

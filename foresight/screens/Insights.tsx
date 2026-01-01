@@ -1,13 +1,17 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
 import { MotiView, AnimatePresence } from 'moti';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
 import { useApp } from '../context/AppContext';
 import { formatCurrency } from '../utils';
 import { Insight } from '../types';
 import { colors, spacing, borderRadius, typography, commonStyles } from '../theme';
+import BudgetManager from '../components/BudgetManager';
+import { InsightsStackParamList } from '../navigation/TabNavigator';
 
 const LOADING_DELAY_MS = 1200;
 
@@ -142,8 +146,10 @@ const InsightCard: React.FC<InsightCardProps> = ({ insight, onDismiss, onAction 
 
 const Insights: React.FC = () => {
   const insets = useSafeAreaInsets();
+  const navigation = useNavigation<NativeStackNavigationProp<InsightsStackParamList>>();
   const { insights, dismissInsight, markInsightRead } = useApp();
   const [isLoading, setIsLoading] = useState(true);
+  const [showBudgetManager, setShowBudgetManager] = useState(false);
 
   useEffect(() => {
     const timer = setTimeout(() => setIsLoading(false), LOADING_DELAY_MS);
@@ -160,12 +166,32 @@ const Insights: React.FC = () => {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.header}>
-          <Text style={styles.title}>Insights</Text>
-          {unreadCount > 0 && (
-            <View style={styles.badge}>
-              <Text style={styles.badgeText}>{unreadCount} new</Text>
-            </View>
-          )}
+          <View style={styles.headerLeft}>
+            <Text style={styles.title}>Insights</Text>
+            {unreadCount > 0 && (
+              <View style={styles.badge}>
+                <Text style={styles.badgeText}>{unreadCount} new</Text>
+              </View>
+            )}
+          </View>
+          <View style={styles.headerButtons}>
+            <TouchableOpacity 
+              style={styles.headerBtn}
+              onPress={() => navigation.navigate('SpendingTrends')}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="trending-up-outline" size={18} color={colors.mint} />
+              <Text style={styles.headerBtnText}>Trends</Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={styles.headerBtn}
+              onPress={() => setShowBudgetManager(true)}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="wallet-outline" size={18} color={colors.mint} />
+              <Text style={styles.headerBtnText}>Budgets</Text>
+            </TouchableOpacity>
+          </View>
         </View>
         <Text style={styles.subtitle}>AI-powered suggestions for your wallet.</Text>
 
@@ -199,6 +225,11 @@ const Insights: React.FC = () => {
           )}
         </AnimatePresence>
       </ScrollView>
+      
+      <BudgetManager 
+        isOpen={showBudgetManager} 
+        onClose={() => setShowBudgetManager(false)} 
+      />
     </View>
   );
 };
@@ -218,8 +249,13 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     marginTop: spacing[4],
     marginBottom: spacing[2],
+  },
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   title: {
     fontSize: typography.fontSizes['2xl'],
@@ -236,6 +272,24 @@ const styles = StyleSheet.create({
   badgeText: {
     fontSize: typography.fontSizes.xs,
     fontWeight: typography.fontWeights.bold,
+    color: colors.mint,
+  },
+  headerButtons: {
+    flexDirection: 'row',
+    gap: spacing[2],
+  },
+  headerBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[1.5],
+    backgroundColor: colors.mintMuted,
+    paddingHorizontal: spacing[3],
+    paddingVertical: spacing[2],
+    borderRadius: borderRadius.xl,
+  },
+  headerBtnText: {
+    fontSize: typography.fontSizes.sm,
+    fontWeight: typography.fontWeights.semibold,
     color: colors.mint,
   },
   subtitle: {

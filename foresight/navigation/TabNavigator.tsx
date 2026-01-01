@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, StyleSheet, TouchableOpacity, Platform } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
@@ -9,7 +10,13 @@ import Dashboard from '../screens/Dashboard';
 import Activity from '../screens/Activity';
 import Insights from '../screens/Insights';
 import Profile from '../screens/Profile';
+import SpendingTrends from '../screens/SpendingTrends';
 import { colors, spacing, borderRadius } from '../theme';
+
+export type InsightsStackParamList = {
+  InsightsMain: undefined;
+  SpendingTrends: undefined;
+};
 
 export type TabParamList = {
   Home: undefined;
@@ -20,6 +27,19 @@ export type TabParamList = {
 };
 
 const Tab = createBottomTabNavigator<TabParamList>();
+const InsightsStack = createNativeStackNavigator<InsightsStackParamList>();
+
+// Insights tab with stack navigator for sub-screens
+const InsightsStackScreen = () => (
+  <InsightsStack.Navigator
+    screenOptions={{
+      headerShown: false,
+    }}
+  >
+    <InsightsStack.Screen name="InsightsMain" component={Insights} />
+    <InsightsStack.Screen name="SpendingTrends" component={SpendingTrends} />
+  </InsightsStack.Navigator>
+);
 
 // Placeholder for Add screen (handled by modal)
 const AddPlaceholder = () => null;
@@ -118,7 +138,7 @@ const TabNavigator: React.FC<TabNavigatorProps> = ({ onAddPress }) => {
       <Tab.Screen name="Home" component={Dashboard} />
       <Tab.Screen name="Activity" component={Activity} />
       <Tab.Screen name="Add" component={AddPlaceholder} />
-      <Tab.Screen name="Insights" component={Insights} />
+      <Tab.Screen name="Insights" component={InsightsStackScreen} />
       <Tab.Screen name="Profile" component={Profile} />
     </Tab.Navigator>
   );

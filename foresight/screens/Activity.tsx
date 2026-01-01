@@ -1,8 +1,9 @@
 import React, { useState, useMemo, useCallback } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, TextInput, StyleSheet } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, TextInput, StyleSheet, Alert } from 'react-native';
 import { MotiView, AnimatePresence } from 'moti';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import * as Haptics from 'expo-haptics';
 
 import { useApp } from '../context/AppContext';
 import TransactionItem from '../components/TransactionItem';
@@ -12,6 +13,7 @@ import { Transaction, BudgetCategory } from '../types';
 import { colors, spacing, borderRadius, typography, commonStyles } from '../theme';
 
 type FilterType = 'all' | 'income' | 'expense';
+type DateRangeType = 'all' | 'today' | 'week' | 'month' | 'custom';
 
 const CATEGORY_LABELS: Record<BudgetCategory, string> = {
   food_dining: '🍔 Food',
@@ -46,13 +48,40 @@ const FilterChip: React.FC<FilterChipProps> = ({ label, active, onPress }) => (
 
 const Activity: React.FC = () => {
   const insets = useSafeAreaInsets();
-  const { transactions } = useApp();
+  const { transactions, deleteTransactions } = useApp();
   const [filter, setFilter] = useState<FilterType>('all');
+  const [dateRange, setDateRange] = useState<DateRangeType>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategories, setSelectedCategories] = useState<Set<BudgetCategory>>(new Set());
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
+  
+  // Selection mode state
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+  // Calculate date range boundaries
+  const dateRangeBounds = useMemo(() => {
+    const now = new Date();
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    
+    switch (dateRange) {
+      case 'today':
+        return { start: startOfToday, end: now };
+      case 'week': {
+        const startOfWeek = new Date(startOfToday);
+        startOfWeek.setDate(startOfWeek.getDate() - startOfWeek.getDay()); // Sunday
+        return { start: startOfWeek, end: now };
+      }
+      case 'month': {
+        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+        return { start: startOfMonth, end: now };
+      }
+      default:
+        return null; // 'all' - no date filtering
+    }
+  }, [dateRange]);
 
   // All available categories
   const allCategories = useMemo(() => {
@@ -64,9 +93,20 @@ const Activity: React.FC = () => {
   // Filter transactions
   const filteredTransactions = useMemo(() => {
     return transactions.filter(t => {
+      // Type filter
       if (filter === 'income' && t.type !== 'income') return false;
       if (filter === 'expense' && t.type !== 'expense') return false;
+      
+      // Date range filter
+      if (dateRangeBounds) {
+        const txDate = new Date(t.date);
+        if (txDate < dateRangeBounds.start || txDate > dateRangeBounds.end) return false;
+      }
+      
+      // Category filter
       if (selectedCategories.size > 0 && !selectedCategories.has(t.category)) return false;
+      
+      // Search filter
       if (searchQuery.trim()) {
         const query = searchQuery.toLowerCase();
         const matchesMerchant = t.merchantName.toLowerCase().includes(query);
@@ -75,7 +115,7 @@ const Activity: React.FC = () => {
       }
       return true;
     });
-  }, [transactions, filter, searchQuery, selectedCategories]);
+  }, [transactions, filter, dateRangeBounds, searchQuery, selectedCategories]);
 
   // Group by date
   const grouped = useMemo(() => {
@@ -105,12 +145,67 @@ const Activity: React.FC = () => {
 
   const clearFilters = useCallback(() => {
     setFilter('all');
+    setDateRange('all');
     setSearchQuery('');
     setSelectedCategories(new Set());
     setShowFilters(false);
   }, []);
 
-  const hasActiveFilters = filter !== 'all' || searchQuery.trim() || selectedCategories.size > 0;
+  // Selection mode functions
+  const enterSelectionMode = useCallback((initialId?: string) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setSelectionMode(true);
+    if (initialId) {
+      setSelectedIds(new Set([initialId]));
+    }
+  }, []);
+
+  const exitSelectionMode = useCallback(() => {
+    setSelectionMode(false);
+    setSelectedIds(new Set());
+  }, []);
+
+  const toggleSelection = useCallback((id: string) => {
+    Haptics.selectionAsync();
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  }, []);
+
+  const selectAll = useCallback(() => {
+    Haptics.selectionAsync();
+    const allIds = filteredTransactions.map(t => t.id);
+    setSelectedIds(new Set(allIds));
+  }, [filteredTransactions]);
+
+  const handleBulkDelete = useCallback(() => {
+    if (selectedIds.size === 0) return;
+
+    Alert.alert(
+      'Delete Transactions',
+      `Are you sure you want to delete ${selectedIds.size} transaction${selectedIds.size > 1 ? 's' : ''}?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => {
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            deleteTransactions(Array.from(selectedIds));
+            exitSelectionMode();
+          },
+        },
+      ]
+    );
+  }, [selectedIds, deleteTransactions, exitSelectionMode]);
+
+  const hasActiveFilters = filter !== 'all' || dateRange !== 'all' || searchQuery.trim() || selectedCategories.size > 0;
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -121,23 +216,58 @@ const Activity: React.FC = () => {
       >
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.title}>Activity</Text>
-          <View style={commonStyles.row}>
-            <TouchableOpacity
-              onPress={() => setIsSearchOpen(!isSearchOpen)}
-              style={[styles.iconButton, isSearchOpen && styles.iconButtonActive]}
-            >
-              <Ionicons name="search" size={18} color={isSearchOpen ? colors.black : colors.neutral400} />
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={() => setShowFilters(!showFilters)}
-              style={[styles.iconButton, showFilters && styles.iconButtonActive]}
-            >
-              <Ionicons name="options-outline" size={18} color={showFilters ? colors.black : colors.neutral400} />
-              {hasActiveFilters && !showFilters && <View style={styles.filterBadge} />}
-            </TouchableOpacity>
-          </View>
+          {selectionMode ? (
+            <>
+              <TouchableOpacity onPress={exitSelectionMode} style={styles.cancelBtn}>
+                <Text style={styles.cancelBtnText}>Cancel</Text>
+              </TouchableOpacity>
+              <Text style={styles.selectionCount}>
+                {selectedIds.size} selected
+              </Text>
+              <View style={commonStyles.row}>
+                <TouchableOpacity onPress={selectAll} style={styles.selectAllBtn}>
+                  <Text style={styles.selectAllText}>Select All</Text>
+                </TouchableOpacity>
+              </View>
+            </>
+          ) : (
+            <>
+              <Text style={styles.title}>Activity</Text>
+              <View style={commonStyles.row}>
+                <TouchableOpacity
+                  onPress={() => setIsSearchOpen(!isSearchOpen)}
+                  style={[styles.iconButton, isSearchOpen && styles.iconButtonActive]}
+                >
+                  <Ionicons name="search" size={18} color={isSearchOpen ? colors.black : colors.neutral400} />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => setShowFilters(!showFilters)}
+                  style={[styles.iconButton, showFilters && styles.iconButtonActive]}
+                >
+                  <Ionicons name="options-outline" size={18} color={showFilters ? colors.black : colors.neutral400} />
+                  {hasActiveFilters && !showFilters && <View style={styles.filterBadge} />}
+                </TouchableOpacity>
+              </View>
+            </>
+          )}
         </View>
+
+        {/* Bulk Action Bar */}
+        <AnimatePresence>
+          {selectionMode && selectedIds.size > 0 && (
+            <MotiView
+              from={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 56 }}
+              exit={{ opacity: 0, height: 0 }}
+              style={styles.bulkActionBar}
+            >
+              <TouchableOpacity onPress={handleBulkDelete} style={styles.bulkDeleteBtn}>
+                <Ionicons name="trash-outline" size={18} color={colors.white} />
+                <Text style={styles.bulkDeleteText}>Delete ({selectedIds.size})</Text>
+              </TouchableOpacity>
+            </MotiView>
+          )}
+        </AnimatePresence>
 
         {/* Search Bar */}
         <AnimatePresence>
@@ -182,26 +312,68 @@ const Activity: React.FC = () => {
               exit={{ opacity: 0, height: 0 }}
               style={styles.categoryFilters}
             >
-              <View style={commonStyles.rowBetween}>
-                <Text style={styles.categoryLabel}>Categories</Text>
-                {selectedCategories.size > 0 && (
-                  <TouchableOpacity onPress={() => setSelectedCategories(new Set())}>
-                    <Text style={styles.clearText}>Clear</Text>
-                  </TouchableOpacity>
-                )}
-              </View>
-              <View style={styles.categoryPills}>
-                {allCategories.map(cat => (
+              {/* Date Range Section */}
+              <View style={styles.filterSection}>
+                <Text style={styles.categoryLabel}>Date Range</Text>
+                <View style={styles.dateRangePills}>
                   <TouchableOpacity
-                    key={cat}
-                    onPress={() => toggleCategory(cat)}
-                    style={[styles.categoryPill, selectedCategories.has(cat) && styles.categoryPillActive]}
+                    onPress={() => setDateRange('all')}
+                    style={[styles.dateRangePill, dateRange === 'all' && styles.dateRangePillActive]}
                   >
-                    <Text style={[styles.categoryPillText, selectedCategories.has(cat) && styles.categoryPillTextActive]}>
-                      {CATEGORY_LABELS[cat]}
+                    <Text style={[styles.dateRangePillText, dateRange === 'all' && styles.dateRangePillTextActive]}>
+                      All Time
                     </Text>
                   </TouchableOpacity>
-                ))}
+                  <TouchableOpacity
+                    onPress={() => setDateRange('today')}
+                    style={[styles.dateRangePill, dateRange === 'today' && styles.dateRangePillActive]}
+                  >
+                    <Text style={[styles.dateRangePillText, dateRange === 'today' && styles.dateRangePillTextActive]}>
+                      Today
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => setDateRange('week')}
+                    style={[styles.dateRangePill, dateRange === 'week' && styles.dateRangePillActive]}
+                  >
+                    <Text style={[styles.dateRangePillText, dateRange === 'week' && styles.dateRangePillTextActive]}>
+                      This Week
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => setDateRange('month')}
+                    style={[styles.dateRangePill, dateRange === 'month' && styles.dateRangePillActive]}
+                  >
+                    <Text style={[styles.dateRangePillText, dateRange === 'month' && styles.dateRangePillTextActive]}>
+                      This Month
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {/* Categories Section */}
+              <View style={styles.filterSection}>
+                <View style={commonStyles.rowBetween}>
+                  <Text style={styles.categoryLabel}>Categories</Text>
+                  {selectedCategories.size > 0 && (
+                    <TouchableOpacity onPress={() => setSelectedCategories(new Set())}>
+                      <Text style={styles.clearText}>Clear</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+                <View style={styles.categoryPills}>
+                  {allCategories.map(cat => (
+                    <TouchableOpacity
+                      key={cat}
+                      onPress={() => toggleCategory(cat)}
+                      style={[styles.categoryPill, selectedCategories.has(cat) && styles.categoryPillActive]}
+                    >
+                      <Text style={[styles.categoryPillText, selectedCategories.has(cat) && styles.categoryPillTextActive]}>
+                        {CATEGORY_LABELS[cat]}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
               </View>
             </MotiView>
           )}
@@ -262,11 +434,15 @@ const Activity: React.FC = () => {
                   </Text>
                 </View>
                 <View style={styles.transactionList}>
-                  {dateTransactions.map(t => (
+{dateTransactions.map(t => (
                     <TransactionItem
                       key={t.id}
                       transaction={t}
-                      onPress={() => setSelectedTransaction(t)}
+                      onPress={() => selectionMode ? toggleSelection(t.id) : setSelectedTransaction(t)}
+                      onLongPress={() => enterSelectionMode(t.id)}
+                      selectionMode={selectionMode}
+                      selected={selectedIds.has(t.id)}
+                      onToggleSelected={() => toggleSelection(t.id)}
                     />
                   ))}
                 </View>
@@ -387,12 +563,39 @@ const styles = StyleSheet.create({
     padding: spacing[4],
     marginBottom: spacing[4],
   },
+  filterSection: {
+    marginBottom: spacing[4],
+  },
   categoryLabel: {
     fontSize: typography.fontSizes.xs,
     fontWeight: typography.fontWeights.bold,
     color: colors.neutral500,
     textTransform: 'uppercase',
     letterSpacing: typography.letterSpacing.wider,
+    marginBottom: spacing[3],
+  },
+  dateRangePills: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing[2],
+  },
+  dateRangePill: {
+    paddingHorizontal: spacing[3],
+    paddingVertical: spacing[1.5],
+    borderRadius: borderRadius.full,
+    backgroundColor: colors.surface300,
+  },
+  dateRangePillActive: {
+    backgroundColor: colors.mintMuted,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 217, 165, 0.5)',
+  },
+  dateRangePillText: {
+    fontSize: typography.fontSizes.xs,
+    color: colors.neutral400,
+  },
+  dateRangePillTextActive: {
+    color: colors.mint,
   },
   clearText: {
     fontSize: typography.fontSizes.xs,
@@ -511,6 +714,50 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.surface300,
     overflow: 'hidden',
+  },
+  // Selection mode styles
+  cancelBtn: {
+    paddingHorizontal: spacing[3],
+    paddingVertical: spacing[2],
+  },
+  cancelBtnText: {
+    fontSize: typography.fontSizes.md,
+    color: colors.mint,
+    fontWeight: typography.fontWeights.medium,
+  },
+  selectionCount: {
+    fontSize: typography.fontSizes.lg,
+    fontWeight: typography.fontWeights.semibold,
+    color: colors.white,
+  },
+  selectAllBtn: {
+    paddingHorizontal: spacing[3],
+    paddingVertical: spacing[2],
+  },
+  selectAllText: {
+    fontSize: typography.fontSizes.sm,
+    color: colors.mint,
+    fontWeight: typography.fontWeights.medium,
+  },
+  bulkActionBar: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: spacing[4],
+  },
+  bulkDeleteBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[2],
+    backgroundColor: colors.danger,
+    paddingHorizontal: spacing[6],
+    paddingVertical: spacing[3],
+    borderRadius: borderRadius.xl,
+  },
+  bulkDeleteText: {
+    fontSize: typography.fontSizes.md,
+    fontWeight: typography.fontWeights.semibold,
+    color: colors.white,
   },
 });
 

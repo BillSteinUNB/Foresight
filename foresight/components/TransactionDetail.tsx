@@ -1,5 +1,5 @@
-import React, { useCallback } from 'react';
-import { View, Text, TouchableOpacity, Modal, StyleSheet, ScrollView } from 'react-native';
+import React, { useCallback, useState } from 'react';
+import { View, Text, TouchableOpacity, Modal, StyleSheet, ScrollView, Image, Alert } from 'react-native';
 import { MotiView } from 'moti';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
@@ -7,6 +7,8 @@ import * as Haptics from 'expo-haptics';
 import { Transaction } from '../types';
 import { formatCurrency, getCategoryIcon, getCategoryColor } from '../utils';
 import { colors, spacing, borderRadius, typography, commonStyles } from '../theme';
+import AddTransaction from './AddTransaction';
+import { useApp } from '../context/AppContext';
 
 interface Props {
   transaction: Transaction | null;
@@ -15,10 +17,33 @@ interface Props {
 }
 
 const TransactionDetail: React.FC<Props> = ({ transaction, isOpen, onClose }) => {
+  const { updateTransaction, deleteTransaction } = useApp();
+  const [isEditing, setIsEditing] = useState(false);
+  const [receiptPreviewVisible, setReceiptPreviewVisible] = useState(false);
+
   if (!transaction) return null;
 
   const isExpense = transaction.type === 'expense';
   const categoryColor = getCategoryColor(transaction.category);
+
+  const handleDelete = () => {
+    Alert.alert(
+      'Delete Transaction',
+      `Are you sure you want to delete this ${transaction.merchantName} transaction?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => {
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            deleteTransaction(transaction.id);
+            onClose();
+          },
+        },
+      ]
+    );
+  };
 
   const formatDateTime = (dateString: string) => {
     const date = new Date(dateString);
@@ -46,12 +71,13 @@ const TransactionDetail: React.FC<Props> = ({ transaction, isOpen, onClose }) =>
   );
 
   return (
-    <Modal
-      visible={isOpen}
-      transparent
-      animationType="slide"
-      onRequestClose={onClose}
-    >
+    <>
+      <Modal
+        visible={isOpen}
+        transparent
+        animationType="slide"
+        onRequestClose={onClose}
+      >
       <View style={styles.overlay}>
         <TouchableOpacity style={styles.backdrop} onPress={onClose} activeOpacity={1} />
 
@@ -106,9 +132,47 @@ const TransactionDetail: React.FC<Props> = ({ transaction, isOpen, onClose }) =>
               <DetailRow icon="location-outline" label="Location" value="New York, NY" />
             </View>
 
+            {/* Notes Section */}
+            {transaction.notes && (
+              <View style={styles.notesCard}>
+                <View style={commonStyles.row}>
+                  <Ionicons name="document-text-outline" size={16} color={colors.neutral500} />
+                  <Text style={styles.notesLabel}>Notes</Text>
+                </View>
+                <Text style={styles.notesText}>{transaction.notes}</Text>
+              </View>
+            )}
+
+            {/* Receipt Section */}
+            {transaction.receiptUri && (
+              <View style={styles.receiptCard}>
+                <View style={commonStyles.row}>
+                  <Ionicons name="receipt-outline" size={16} color={colors.neutral500} />
+                  <Text style={styles.notesLabel}>Receipt</Text>
+                </View>
+                <TouchableOpacity 
+                  style={styles.receiptPreview}
+                  onPress={() => setReceiptPreviewVisible(true)}
+                  activeOpacity={0.8}
+                >
+                  <Image source={{ uri: transaction.receiptUri }} style={styles.receiptImage} />
+                  <View style={styles.receiptOverlay}>
+                    <Ionicons name="expand-outline" size={16} color={colors.white} />
+                    <Text style={styles.receiptOverlayText}>View Full</Text>
+                  </View>
+                </TouchableOpacity>
+              </View>
+            )}
+
             {/* Action Buttons */}
             <View style={styles.actionGrid}>
-              <TouchableOpacity style={styles.actionBtn} onPress={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}>
+              <TouchableOpacity
+                style={styles.actionBtn}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  setIsEditing(true);
+                }}
+              >
                 <Ionicons name="create-outline" size={20} color={colors.neutral400} />
                 <Text style={styles.actionBtnText}>Edit</Text>
               </TouchableOpacity>
@@ -116,7 +180,7 @@ const TransactionDetail: React.FC<Props> = ({ transaction, isOpen, onClose }) =>
                 <Ionicons name="share-outline" size={20} color={colors.neutral400} />
                 <Text style={styles.actionBtnText}>Share</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={[styles.actionBtn, styles.deleteBtn]} onPress={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}>
+              <TouchableOpacity style={[styles.actionBtn, styles.deleteBtn]} onPress={handleDelete}>
                 <Ionicons name="trash-outline" size={20} color={colors.danger} />
                 <Text style={[styles.actionBtnText, { color: colors.danger }]}>Delete</Text>
               </TouchableOpacity>
@@ -135,7 +199,46 @@ const TransactionDetail: React.FC<Props> = ({ transaction, isOpen, onClose }) =>
           </ScrollView>
         </MotiView>
       </View>
+
+      {/* Receipt Full Screen Preview */}
+      {transaction.receiptUri && (
+        <Modal
+          visible={receiptPreviewVisible}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setReceiptPreviewVisible(false)}
+        >
+          <TouchableOpacity 
+            style={styles.receiptFullScreenBackdrop}
+            onPress={() => setReceiptPreviewVisible(false)}
+            activeOpacity={1}
+          >
+            <Image 
+              source={{ uri: transaction.receiptUri }} 
+              style={styles.receiptFullScreenImage}
+              resizeMode="contain"
+            />
+            <TouchableOpacity 
+              style={styles.receiptCloseBtn}
+              onPress={() => setReceiptPreviewVisible(false)}
+            >
+              <Ionicons name="close" size={24} color={colors.white} />
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </Modal>
+      )}
     </Modal>
+
+      {/* Edit Transaction Modal */}
+      <AddTransaction
+        isOpen={isEditing}
+        onClose={() => setIsEditing(false)}
+        onAdd={() => {}} // Not used in edit mode
+        onUpdate={updateTransaction}
+        mode="edit"
+        initialTransaction={transaction}
+      />
+    </>
   );
 };
 
@@ -233,6 +336,80 @@ const styles = StyleSheet.create({
     padding: spacing[4],
     marginHorizontal: spacing[6],
     marginBottom: spacing[6],
+  },
+  notesCard: {
+    backgroundColor: colors.surface100,
+    borderRadius: borderRadius.xl,
+    padding: spacing[4],
+    marginHorizontal: spacing[6],
+    marginBottom: spacing[4],
+    gap: spacing[2],
+  },
+  notesLabel: {
+    fontSize: typography.fontSizes.sm,
+    color: colors.neutral400,
+    marginLeft: spacing[2],
+  },
+  notesText: {
+    fontSize: typography.fontSizes.base,
+    color: colors.white,
+    lineHeight: 22,
+  },
+  receiptCard: {
+    backgroundColor: colors.surface100,
+    borderRadius: borderRadius.xl,
+    padding: spacing[4],
+    marginHorizontal: spacing[6],
+    marginBottom: spacing[6],
+    gap: spacing[3],
+  },
+  receiptPreview: {
+    position: 'relative',
+    borderRadius: borderRadius.lg,
+    overflow: 'hidden',
+  },
+  receiptImage: {
+    width: '100%',
+    height: 120,
+    borderRadius: borderRadius.lg,
+  },
+  receiptOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing[1],
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    paddingVertical: spacing[2],
+  },
+  receiptOverlayText: {
+    fontSize: typography.fontSizes.xs,
+    color: colors.white,
+    fontWeight: typography.fontWeights.medium,
+  },
+  receiptFullScreenBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.95)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  receiptFullScreenImage: {
+    width: '100%',
+    height: '80%',
+  },
+  receiptCloseBtn: {
+    position: 'absolute',
+    top: 60,
+    right: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   detailRow: {
     flexDirection: 'row',

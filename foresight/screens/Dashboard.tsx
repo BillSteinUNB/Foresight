@@ -1,23 +1,39 @@
 import React, { useState, useMemo, useCallback } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert } from 'react-native';
 import { MotiView } from 'moti';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
+import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 
 import { useApp } from '../context/AppContext';
 import { formatCurrency, formatCompactCurrency, getGreeting, getDaysUntilEndOfMonth } from '../utils';
-import { SavingsGoal, Transaction } from '../types';
+import { SavingsGoal, Transaction, Bill } from '../types';
 import { colors, spacing, borderRadius, typography, commonStyles } from '../theme';
 import HealthDial from '../components/HealthDial';
 import LiquidGauge from '../components/LiquidGauge';
 import TransactionItem from '../components/TransactionItem';
 import TransactionDetail from '../components/TransactionDetail';
 import AddGoal from '../components/AddGoal';
+import BillFormModal from '../components/BillFormModal';
+import { TabParamList } from '../navigation/TabNavigator';
 
 const Dashboard: React.FC = () => {
   const insets = useSafeAreaInsets();
-  const { transactions, goals, bills, user, addGoal } = useApp();
+  const navigation = useNavigation<BottomTabNavigationProp<TabParamList>>();
+  const {
+    transactions,
+    goals,
+    bills,
+    user,
+    addGoal,
+    addBill,
+    updateBill,
+    deleteBill,
+  } = useApp();
   const [isAddGoalOpen, setIsAddGoalOpen] = useState(false);
+  const [isBillModalOpen, setIsBillModalOpen] = useState(false);
+  const [editingBill, setEditingBill] = useState<Bill | null>(null);
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
 
   // Memoized calculations
@@ -39,6 +55,36 @@ const Dashboard: React.FC = () => {
     addGoal(newGoal);
     setIsAddGoalOpen(false);
   }, [addGoal]);
+
+  const handleAddBill = useCallback(() => {
+    setEditingBill(null);
+    setIsBillModalOpen(true);
+  }, []);
+
+  const handleEditBill = useCallback((bill: Bill) => {
+    setEditingBill(bill);
+    setIsBillModalOpen(true);
+  }, []);
+
+  const handleDeleteBill = useCallback((bill: Bill) => {
+    Alert.alert(
+      'Delete Bill',
+      `Are you sure you want to delete "${bill.name}"?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => deleteBill(bill.id),
+        },
+      ],
+    );
+  }, [deleteBill]);
+
+  const handleAddBillForm = useCallback((billData: any) => {
+    addBill(billData);
+    setIsBillModalOpen(false);
+  }, [addBill]);
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -118,13 +164,27 @@ const Dashboard: React.FC = () => {
 
         {/* Upcoming Bills */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Upcoming Bills</Text>
+          <View style={commonStyles.rowBetween}>
+            <Text style={styles.sectionTitle}>Upcoming Bills</Text>
+            <TouchableOpacity onPress={handleAddBill}>
+              <Text style={styles.addButton}>+ Add</Text>
+            </TouchableOpacity>
+          </View>
           {bills.map(bill => (
-            <TouchableOpacity key={bill.id} style={styles.billItem} activeOpacity={0.7}>
+            <TouchableOpacity
+              key={bill.id}
+              style={styles.billItem}
+              activeOpacity={0.7}
+              onPress={() => handleEditBill(bill)}
+              onLongPress={() => {
+                // Long press to show delete option (simple implementation)
+                handleDeleteBill(bill);
+              }}
+            >
               <View style={commonStyles.row}>
                 <View style={[
                   styles.billIndicator,
-                  { backgroundColor: bill.status === 'danger' ? colors.danger : 
+                  { backgroundColor: bill.status === 'danger' ? colors.danger :
                                     bill.status === 'warning' ? colors.warning : colors.mint }
                 ]} />
                 <View>
@@ -134,7 +194,10 @@ const Dashboard: React.FC = () => {
                   </Text>
                 </View>
               </View>
-              <Text style={styles.billAmount}>{formatCurrency(bill.amount)}</Text>
+              <View style={commonStyles.row}>
+                <Text style={styles.billAmount}>{formatCurrency(bill.amount)}</Text>
+                <Ionicons name="create-outline" size={16} color={colors.neutral500} />
+              </View>
             </TouchableOpacity>
           ))}
         </View>
@@ -182,7 +245,9 @@ const Dashboard: React.FC = () => {
         <View style={styles.section}>
           <View style={commonStyles.rowBetween}>
             <Text style={styles.sectionTitle}>Recent Activity</Text>
-            <Text style={styles.viewAll}>View all</Text>
+            <TouchableOpacity onPress={() => navigation.navigate('Activity')}>
+              <Text style={styles.viewAll}>View all</Text>
+            </TouchableOpacity>
           </View>
           <View style={styles.transactionList}>
             {recentTransactions.map(t => (
@@ -201,6 +266,18 @@ const Dashboard: React.FC = () => {
         isOpen={isAddGoalOpen}
         onClose={() => setIsAddGoalOpen(false)}
         onAdd={handleAddGoal}
+      />
+      <BillFormModal
+        visible={isBillModalOpen}
+        onClose={() => {
+          setIsBillModalOpen(false);
+          setEditingBill(null);
+        }}
+        onAdd={handleAddBillForm}
+        onUpdate={updateBill}
+        onDelete={deleteBill}
+        mode={editingBill ? 'edit' : 'create'}
+        initialBill={editingBill || undefined}
       />
       <TransactionDetail
         transaction={selectedTransaction}

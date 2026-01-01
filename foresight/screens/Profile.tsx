@@ -1,5 +1,5 @@
-import React, { useState, useCallback, useEffect, useRef } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
+import React, { useState, useCallback } from 'react';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator, Alert } from 'react-native';
 import { MotiView, AnimatePresence } from 'moti';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -8,7 +8,10 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useApp } from '../context/AppContext';
 import { LINKED_ACCOUNTS } from '../mockData';
 import { formatCurrency } from '../utils';
+import { exportData, ExportFormat } from '../utils/exportData';
 import { colors, spacing, borderRadius, typography, commonStyles } from '../theme';
+import { DEFAULT_BILL_REMINDER_PREFS } from '../utils/notifications';
+import { BillReminderPreferences } from '../types';
 
 interface MenuItemProps {
   icon: keyof typeof Ionicons.glyphMap;
@@ -57,20 +60,153 @@ const ToggleItem: React.FC<ToggleItemProps> = ({ icon, label, enabled, onToggle 
   </View>
 );
 
+// Days before options for bill reminders
+const DAYS_BEFORE_OPTIONS = [1, 2, 3, 5, 7];
+
+// Time options (hours) for bill reminders
+const TIME_OPTIONS = [
+  { hour: 8, label: '8:00 AM' },
+  { hour: 9, label: '9:00 AM' },
+  { hour: 10, label: '10:00 AM' },
+  { hour: 12, label: '12:00 PM' },
+  { hour: 17, label: '5:00 PM' },
+  { hour: 19, label: '7:00 PM' },
+];
+
+interface BillReminderSettingsProps {
+  prefs: BillReminderPreferences;
+  onUpdate: (updates: Partial<BillReminderPreferences>) => void;
+}
+
+const BillReminderSettings: React.FC<BillReminderSettingsProps> = ({ prefs, onUpdate }) => {
+  return (
+    <View style={styles.reminderSettings}>
+      {/* Enable/Disable Toggle */}
+      <View style={[styles.menuItem, styles.borderBottom]}>
+        <View style={commonStyles.row}>
+          <Ionicons name="notifications-outline" size={20} color={colors.neutral400} />
+          <Text style={styles.menuLabel}>Enable Reminders</Text>
+        </View>
+        <TouchableOpacity
+          onPress={() => onUpdate({ enabled: !prefs.enabled })}
+          style={[styles.toggle, prefs.enabled && styles.toggleActive]}
+          activeOpacity={0.8}
+        >
+          <MotiView
+            animate={{ translateX: prefs.enabled ? 20 : 0 }}
+            transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+            style={styles.toggleThumb}
+          />
+        </TouchableOpacity>
+      </View>
+
+      {/* Days Before Due */}
+      <AnimatePresence>
+        {prefs.enabled && (
+          <MotiView
+            from={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+          >
+            <View style={[styles.settingSection, styles.borderBottom]}>
+              <Text style={styles.settingLabel}>Days Before Due</Text>
+              <View style={styles.optionRow}>
+                {DAYS_BEFORE_OPTIONS.map(days => (
+                  <TouchableOpacity
+                    key={days}
+                    onPress={() => onUpdate({ daysBeforeDue: days })}
+                    style={[
+                      styles.optionPill,
+                      prefs.daysBeforeDue === days && styles.optionPillActive,
+                    ]}
+                    activeOpacity={0.7}
+                  >
+                    <Text
+                      style={[
+                        styles.optionPillText,
+                        prefs.daysBeforeDue === days && styles.optionPillTextActive,
+                      ]}
+                    >
+                      {days}d
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
+            {/* Time of Day */}
+            <View style={styles.settingSection}>
+              <Text style={styles.settingLabel}>Reminder Time</Text>
+              <View style={styles.optionRow}>
+                {TIME_OPTIONS.map(({ hour, label }) => (
+                  <TouchableOpacity
+                    key={hour}
+                    onPress={() => onUpdate({ timeOfDay: { hour, minute: 0 } })}
+                    style={[
+                      styles.optionPill,
+                      styles.optionPillWide,
+                      prefs.timeOfDay.hour === hour && styles.optionPillActive,
+                    ]}
+                    activeOpacity={0.7}
+                  >
+                    <Text
+                      style={[
+                        styles.optionPillText,
+                        prefs.timeOfDay.hour === hour && styles.optionPillTextActive,
+                      ]}
+                    >
+                      {label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+          </MotiView>
+        )}
+      </AnimatePresence>
+    </View>
+  );
+};
+
 const Profile: React.FC = () => {
   const insets = useSafeAreaInsets();
-  const { user, preferences, updatePreferences, updateNotificationPreference } = useApp();
+  const { user, preferences, transactions, goals, bills, updatePreferences, updateNotificationPreference } = useApp();
   const [isExporting, setIsExporting] = useState(false);
   const [exportSuccess, setExportSuccess] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
 
-  const handleExportData = useCallback(() => {
+  const handleExportData = useCallback(async (format: ExportFormat = 'json') => {
     setIsExporting(true);
-    setTimeout(() => {
-      setIsExporting(false);
+    setExportError(null);
+    setExportSuccess(false);
+    
+    try {
+      await exportData(
+        { transactions, goals, bills, user, preferences },
+        format
+      );
       setExportSuccess(true);
       setTimeout(() => setExportSuccess(false), 3000);
-    }, 2000);
-  }, []);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Export failed';
+      setExportError(message);
+      Alert.alert('Export Failed', message);
+    } finally {
+      setIsExporting(false);
+    }
+  }, [transactions, goals, bills, user, preferences]);
+
+  const showExportOptions = useCallback(() => {
+    Alert.alert(
+      'Export Data',
+      'Choose export format:',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'CSV', onPress: () => handleExportData('csv') },
+        { text: 'JSON', onPress: () => handleExportData('json') },
+      ]
+    );
+  }, [handleExportData]);
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -187,6 +323,22 @@ const Profile: React.FC = () => {
           </View>
         </View>
 
+        {/* Bill Reminder Settings */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>BILL REMINDER SETTINGS</Text>
+          <View style={styles.card}>
+            <BillReminderSettings
+              prefs={preferences.billReminder ?? DEFAULT_BILL_REMINDER_PREFS}
+              onUpdate={(updates) => {
+                const currentPrefs = preferences.billReminder ?? DEFAULT_BILL_REMINDER_PREFS;
+                updatePreferences({ 
+                  billReminder: { ...currentPrefs, ...updates } 
+                });
+              }}
+            />
+          </View>
+        </View>
+
         {/* AI Features */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>AI FEATURES</Text>
@@ -205,7 +357,7 @@ const Profile: React.FC = () => {
           <Text style={styles.sectionTitle}>DATA</Text>
           <View style={styles.card}>
             <TouchableOpacity
-              onPress={handleExportData}
+              onPress={showExportOptions}
               disabled={isExporting}
               style={[styles.menuItem, styles.borderBottom]}
               activeOpacity={0.7}
@@ -420,6 +572,46 @@ const styles = StyleSheet.create({
     color: colors.neutral600,
     textAlign: 'center',
     marginTop: spacing[4],
+  },
+  // Bill Reminder Settings styles
+  reminderSettings: {
+    overflow: 'hidden',
+  },
+  settingSection: {
+    padding: spacing[4],
+  },
+  settingLabel: {
+    fontSize: typography.fontSizes.sm,
+    fontWeight: typography.fontWeights.medium,
+    color: colors.neutral400,
+    marginBottom: spacing[3],
+  },
+  optionRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing[2],
+  },
+  optionPill: {
+    paddingHorizontal: spacing[3],
+    paddingVertical: spacing[2],
+    borderRadius: borderRadius.full,
+    backgroundColor: colors.surface300,
+  },
+  optionPillWide: {
+    paddingHorizontal: spacing[3],
+  },
+  optionPillActive: {
+    backgroundColor: colors.mintMuted,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 217, 165, 0.5)',
+  },
+  optionPillText: {
+    fontSize: typography.fontSizes.sm,
+    color: colors.neutral400,
+    fontWeight: typography.fontWeights.medium,
+  },
+  optionPillTextActive: {
+    color: colors.mint,
   },
 });
 

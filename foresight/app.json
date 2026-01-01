@@ -29,8 +29,8 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "expo-haptics"
+      "expo-asset",
+      "expo-font"
     ]
   }
 }
-

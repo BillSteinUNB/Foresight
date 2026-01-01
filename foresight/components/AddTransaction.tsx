@@ -1,39 +1,81 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { View, Text, TextInput, TouchableOpacity, Modal, StyleSheet, KeyboardAvoidingView, Platform, ScrollView, ActivityIndicator } from 'react-native';
-import { MotiView, AnimatePresence } from 'moti';
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  Modal,
+  StyleSheet,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  ActivityIndicator,
+} from 'react-native';
+import { MotiView } from 'moti';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 
-import { Transaction, BudgetCategory } from '../types';
+import { Transaction, TransactionUpdate, BudgetCategory } from '../types';
 import { formatCurrency, isValidAmount } from '../utils';
-import { colors, spacing, borderRadius, typography, commonStyles } from '../theme';
+import { colors, spacing, borderRadius, typography } from '../theme';
+import ReceiptPicker from './ReceiptPicker';
 
 const AI_PROCESSING_DELAY_MS = 1500;
+
+type Mode = 'create' | 'edit';
 
 interface Props {
   isOpen: boolean;
   onClose: () => void;
   onAdd: (t: Partial<Transaction>) => void;
+  onUpdate?: (id: string, updates: TransactionUpdate) => void;
+  mode?: Mode;
+  initialTransaction?: Transaction;
 }
 
-const AddTransaction: React.FC<Props> = ({ isOpen, onClose, onAdd }) => {
+const AddTransaction: React.FC<Props> = ({
+  isOpen,
+  onClose,
+  onAdd,
+  onUpdate,
+  mode = 'create',
+  initialTransaction,
+}) => {
+  // Form state
   const [input, setInput] = useState('');
   const [isListening, setIsListening] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [parsedData, setParsedData] = useState<Partial<Transaction> | null>(null);
+  const [notes, setNotes] = useState('');
+  const [receiptUri, setReceiptUri] = useState<string | undefined>(undefined);
   const inputRef = useRef<TextInput>(null);
 
+  // Initialize from initial transaction in edit mode
   useEffect(() => {
     if (isOpen) {
-      setInput('');
-      setParsedData(null);
-      setIsProcessing(false);
-      setIsListening(false);
-      setTimeout(() => inputRef.current?.focus(), 300);
+      if (mode === 'edit' && initialTransaction) {
+        // In edit mode, skip AI parsing and use existing data
+        setParsedData(initialTransaction);
+        setInput(`${initialTransaction.merchantName} $${initialTransaction.amount}`);
+        setNotes(initialTransaction.notes || '');
+        setReceiptUri(initialTransaction.receiptUri);
+        setIsProcessing(false);
+        setIsListening(false);
+      } else {
+        // In create mode, reset to initial state
+        setInput('');
+        setParsedData(null);
+        setNotes('');
+        setReceiptUri(undefined);
+        setIsProcessing(false);
+        setIsListening(false);
+        setTimeout(() => inputRef.current?.focus(), 300);
+      }
     }
-  }, [isOpen]);
+  }, [isOpen, mode, initialTransaction]);
 
   const handleSimulatedAI = useCallback(() => {
+    if (mode === 'edit') return; // Skip AI in edit mode
     if (!input.trim()) return;
     setIsProcessing(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -65,28 +107,42 @@ const AddTransaction: React.FC<Props> = ({ isOpen, onClose, onAdd }) => {
       setIsProcessing(false);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     }, AI_PROCESSING_DELAY_MS);
-  }, [input]);
+  }, [input, mode]);
 
   const handleConfirm = useCallback(() => {
     if (parsedData && isValidAmount(parsedData.amount || 0)) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      onAdd(parsedData);
+
+      // Add notes and receipt to parsed data
+      const finalData = {
+        ...parsedData,
+        notes: notes.trim() || undefined,
+        receiptUri,
+      };
+
+      if (mode === 'edit' && initialTransaction && onUpdate) {
+        // Edit mode: update existing transaction
+        const { id, merchantLogo, status, ...updates } = finalData;
+        onUpdate(initialTransaction.id, updates as TransactionUpdate);
+      } else if (mode === 'create') {
+        // Create mode: add new transaction
+        onAdd(finalData);
+      }
+
       onClose();
     }
-  }, [parsedData, onAdd, onClose]);
+  }, [parsedData, notes, receiptUri, mode, initialTransaction, onAdd, onUpdate, onClose]);
 
   const handleSuggestion = useCallback((suggestion: string) => {
     setInput(suggestion);
     Haptics.selectionAsync();
   }, []);
 
+  const title = mode === 'edit' ? 'Edit Transaction' : 'Add Transaction';
+  const buttonText = mode === 'edit' ? 'Save' : 'Confirm';
+
   return (
-    <Modal
-      visible={isOpen}
-      transparent
-      animationType="slide"
-      onRequestClose={onClose}
-    >
+    <Modal visible={isOpen} transparent animationType="slide" onRequestClose={onClose}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.overlay}
@@ -102,15 +158,15 @@ const AddTransaction: React.FC<Props> = ({ isOpen, onClose, onAdd }) => {
         >
           {/* Header */}
           <View style={styles.header}>
-            <Text style={styles.title}>Add Transaction</Text>
+            <Text style={styles.title}>{title}</Text>
             <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
               <Ionicons name="close" size={20} color={colors.neutral400} />
             </TouchableOpacity>
           </View>
 
           <ScrollView showsVerticalScrollIndicator={false}>
-            {!parsedData ? (
-              /* Input State */
+            {(!parsedData || mode === 'edit') && mode !== 'edit' && (
+              /* Input State - only in create mode */
               <View style={styles.inputState}>
                 <Text style={styles.subtitle}>Tell me what you spent...</Text>
 
@@ -152,7 +208,7 @@ const AddTransaction: React.FC<Props> = ({ isOpen, onClose, onAdd }) => {
                   )}
                 </TouchableOpacity>
 
-                {/* Suggestions */}
+                {/* Suggestions - only in create mode */}
                 <View style={styles.suggestions}>
                   <Text style={styles.suggestionsLabel}>SUGGESTIONS</Text>
                   <View style={styles.suggestionChips}>
@@ -171,8 +227,10 @@ const AddTransaction: React.FC<Props> = ({ isOpen, onClose, onAdd }) => {
                   </View>
                 </View>
               </View>
-            ) : (
-              /* Confirmation State */
+            )}
+
+            {parsedData && (
+              /* Confirmation State - shown after parsing or in edit mode */
               <View style={styles.confirmState}>
                 <View style={styles.merchantPreview}>
                   <View style={styles.merchantIcon}>
@@ -189,21 +247,65 @@ const AddTransaction: React.FC<Props> = ({ isOpen, onClose, onAdd }) => {
                   </View>
                   <View style={styles.detailRow}>
                     <Text style={styles.detailLabel}>Date</Text>
-                    <Text style={styles.detailValue}>Today</Text>
+                    <Text style={styles.detailValue}>
+                      {parsedData.date
+                        ? new Date(parsedData.date).toLocaleDateString(undefined, {
+                            month: 'short',
+                            day: 'numeric',
+                          })
+                        : 'Today'}
+                    </Text>
                   </View>
                   <View style={styles.detailRow}>
-                    <Text style={styles.detailLabel}>Account</Text>
-                    <Text style={styles.detailValue}>Chase ****4521</Text>
+                    <Text style={styles.detailLabel}>Type</Text>
+                    <Text style={styles.detailValue}>
+                      {parsedData.type === 'expense' ? 'Expense' : 'Income'}
+                    </Text>
                   </View>
+                </View>
+
+                {/* Notes Section */}
+                <View style={styles.notesSection}>
+                  <Text style={styles.notesLabel}>NOTES (OPTIONAL)</Text>
+                  <TextInput
+                    value={notes}
+                    onChangeText={setNotes}
+                    placeholder="Add notes about this transaction..."
+                    placeholderTextColor={colors.neutral600}
+                    style={styles.notesInput}
+                    multiline
+                    numberOfLines={3}
+                  />
+                </View>
+
+                {/* Receipt Section */}
+                <View style={styles.receiptSection}>
+                  <Text style={styles.notesLabel}>RECEIPT (OPTIONAL)</Text>
+                  <ReceiptPicker
+                    receiptUri={receiptUri}
+                    onReceiptChange={setReceiptUri}
+                    transactionId={initialTransaction?.id}
+                  />
                 </View>
 
                 <View style={styles.confirmActions}>
                   <TouchableOpacity
-                    onPress={() => setParsedData(null)}
+                    onPress={() => {
+                      if (mode === 'edit') {
+                        // In edit mode, go back to input state
+                        setParsedData(null);
+                      } else {
+                        // In create mode, reset input
+                        setInput('');
+                        setParsedData(null);
+                      }
+                    }}
                     style={styles.editBtn}
                     activeOpacity={0.7}
                   >
-                    <Text style={styles.editBtnText}>Edit</Text>
+                    <Text style={styles.editBtnText}>
+                      {mode === 'edit' ? 'Back' : 'Edit'}
+                    </Text>
                   </TouchableOpacity>
                   <TouchableOpacity
                     onPress={handleConfirm}
@@ -212,7 +314,7 @@ const AddTransaction: React.FC<Props> = ({ isOpen, onClose, onAdd }) => {
                     activeOpacity={0.8}
                   >
                     <Ionicons name="checkmark" size={20} color={colors.black} />
-                    <Text style={styles.confirmBtnText}>Confirm</Text>
+                    <Text style={styles.confirmBtnText}>{buttonText}</Text>
                   </TouchableOpacity>
                 </View>
               </View>
@@ -375,6 +477,29 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.xl,
     padding: spacing[4],
     gap: spacing[3],
+  },
+  notesSection: {
+    gap: spacing[2],
+  },
+  notesLabel: {
+    fontSize: typography.fontSizes.xs,
+    fontWeight: typography.fontWeights.bold,
+    color: colors.neutral500,
+    letterSpacing: typography.letterSpacing.wider,
+  },
+  notesInput: {
+    backgroundColor: colors.surface100,
+    borderWidth: 1,
+    borderColor: colors.surface300,
+    borderRadius: borderRadius.xl,
+    padding: spacing[4],
+    color: colors.white,
+    fontSize: typography.fontSizes.base,
+    minHeight: 80,
+    textAlignVertical: 'top',
+  },
+  receiptSection: {
+    gap: spacing[2],
   },
   detailRow: {
     flexDirection: 'row',

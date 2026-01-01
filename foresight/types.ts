@@ -19,7 +19,12 @@ export interface Transaction {
   category: BudgetCategory;
   merchantLogo?: string;
   status?: 'pending' | 'completed';
+  notes?: string;
+  receiptUri?: string; // Local file:// URI for receipt image
 }
+
+// Update type that excludes id (can't change id during edit)
+export type TransactionUpdate = Partial<Omit<Transaction, 'id'>>;
 
 export interface SavingsGoal {
   id: string;
@@ -37,6 +42,16 @@ export interface Bill {
   dueDate: string; // ISO date
   isPaid: boolean;
   status: 'safe' | 'warning' | 'danger'; // proximity to due date
+  reminderNotificationIds?: string[]; // expo-notifications IDs for scheduled reminders
+}
+
+export interface CategoryBudget {
+  id: string;
+  category: BudgetCategory;
+  monthlyLimit: number;
+  currentSpent: number; // Computed from transactions
+  alertThreshold: number; // 0.0 - 1.0, when to warn (e.g., 0.8 = 80%)
+  isActive: boolean;
 }
 
 export interface Insight {
@@ -94,6 +109,12 @@ export interface NotificationSettings {
   insightAlerts: boolean;
 }
 
+export interface BillReminderPreferences {
+  enabled: boolean;
+  daysBeforeDue: number; // e.g. 1, 3, 7
+  timeOfDay: { hour: number; minute: number }; // schedule time (24h format)
+}
+
 export interface UserPreferences {
   currency: string;
   locale: string;
@@ -102,6 +123,7 @@ export interface UserPreferences {
   biometricEnabled: boolean;
   theme: 'dark' | 'light' | 'system';
   aiInsightsEnabled: boolean;
+  billReminder?: BillReminderPreferences;
 }
 
 export interface Space {
@@ -139,4 +161,17 @@ export interface InsightExtended extends Insight {
   priority: 'high' | 'medium' | 'low';
   expiresAt?: string;
   category?: 'saving' | 'spending' | 'income' | 'subscription' | 'bill';
+}
+
+// === Spending Trends Types ===
+
+export type TrendPeriod = 'week' | 'month' | '3months' | 'year';
+export type TrendGranularity = 'day' | 'week';
+
+export interface TrendPoint {
+  label: string;         // e.g. "Jan 3" or "Wk 2"
+  startDate: string;     // ISO
+  endDate: string;       // ISO
+  totalExpense: number;
+  byCategory: Partial<Record<BudgetCategory, number>>;
 }
