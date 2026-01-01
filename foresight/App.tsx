@@ -10,15 +10,50 @@ import TabNavigator from './navigation/TabNavigator';
 import AddTransaction from './components/AddTransaction';
 import BiometricLock from './components/BiometricLock';
 import ErrorBoundary from './components/ErrorBoundary';
+import AuthScreen from './screens/AuthScreen';
+import { useAuthStore } from './stores/useAuthStore';
+import { syncService } from './lib/syncService';
 import { Transaction } from './types';
 import { colors, spacing, typography } from './theme';
 import { canUseBiometrics } from './utils/biometrics';
 
 const AppContent: React.FC = () => {
   const { addTransaction, updateTransaction, isHydrated, preferences } = useApp();
+  const { session, isInitialized: authInitialized, initialize: initializeAuth } = useAuthStore();
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isLocked, setIsLocked] = useState(true);
   const [biometricAvailable, setBiometricAvailable] = useState(false);
+  const [hasSynced, setHasSynced] = useState(false);
+
+  // Initialize auth on mount
+  useEffect(() => {
+    initializeAuth();
+  }, [initializeAuth]);
+
+  // Sync data from cloud after successful login
+  useEffect(() => {
+    const syncFromCloud = async () => {
+      if (session?.user?.id && isHydrated && !hasSynced) {
+        console.log('Syncing data from cloud...');
+        const result = await syncService.pullAll(session.user.id);
+        if (result.success) {
+          console.log('Cloud sync completed');
+        } else {
+          console.warn('Cloud sync failed:', result.error);
+        }
+        setHasSynced(true);
+      }
+    };
+
+    syncFromCloud();
+  }, [session, isHydrated, hasSynced]);
+
+  // Reset sync flag when user logs out
+  useEffect(() => {
+    if (!session) {
+      setHasSynced(false);
+    }
+  }, [session]);
 
   // Check if biometrics are available and enabled
   useEffect(() => {
@@ -73,13 +108,18 @@ const AppContent: React.FC = () => {
   const handleCloseModal = useCallback(() => setIsAddModalOpen(false), []);
 
   // Show loading screen while hydrating from persistence
-  if (!isHydrated) {
+  if (!isHydrated || !authInitialized) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color={colors.mint} />
         <Text style={styles.loadingText}>Loading Foresight...</Text>
       </View>
     );
+  }
+
+  // Show auth screen if not logged in
+  if (!session) {
+    return <AuthScreen />;
   }
 
   return (

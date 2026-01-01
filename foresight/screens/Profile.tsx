@@ -13,6 +13,8 @@ import { colors, spacing, borderRadius, typography, commonStyles } from '../them
 import { DEFAULT_BILL_REMINDER_PREFS } from '../utils/notifications';
 import { BillReminderPreferences } from '../types';
 import { canUseBiometrics, authenticate, checkBiometricCapability, getBiometricTypeName } from '../utils/biometrics';
+import { useAuthStore } from '../stores/useAuthStore';
+import { syncService } from '../lib/syncService';
 
 interface MenuItemProps {
   icon: keyof typeof Ionicons.glyphMap;
@@ -172,11 +174,14 @@ const BillReminderSettings: React.FC<BillReminderSettingsProps> = ({ prefs, onUp
 const Profile: React.FC = () => {
   const insets = useSafeAreaInsets();
   const { user, preferences, transactions, goals, bills, updatePreferences, updateNotificationPreference } = useApp();
+  const { user: authUser, signOut, deleteAccount, isLoading: authLoading } = useAuthStore();
   const [isExporting, setIsExporting] = useState(false);
   const [exportSuccess, setExportSuccess] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
   const [biometricAvailable, setBiometricAvailable] = useState(false);
   const [biometricName, setBiometricName] = useState('Biometrics');
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null);
 
   // Check biometric availability on mount
   useEffect(() => {
@@ -259,6 +264,74 @@ const Profile: React.FC = () => {
     );
   }, [handleExportData]);
 
+  const handleSignOut = useCallback(() => {
+    Alert.alert(
+      'Sign Out',
+      'Are you sure you want to sign out?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Sign Out', 
+          style: 'destructive',
+          onPress: async () => {
+            await signOut();
+          }
+        },
+      ]
+    );
+  }, [signOut]);
+
+  const handleDeleteAccount = useCallback(() => {
+    Alert.alert(
+      'Delete Account',
+      'This will permanently delete your account and all data. This action cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => {
+            // Second confirmation for destructive action
+            Alert.alert(
+              'Are you absolutely sure?',
+              'Type DELETE to confirm',
+              [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                  text: 'Delete Forever',
+                  style: 'destructive',
+                  onPress: async () => {
+                    if (authUser?.id) {
+                      // Delete all user data from Supabase first
+                      await syncService.deleteAllUserData(authUser.id);
+                    }
+                    await deleteAccount();
+                  }
+                },
+              ]
+            );
+          }
+        },
+      ]
+    );
+  }, [authUser, deleteAccount]);
+
+  const handleSync = useCallback(async () => {
+    if (!authUser?.id || isSyncing) return;
+    
+    setIsSyncing(true);
+    try {
+      // Push local changes first, then pull remote
+      await syncService.pushAll(authUser.id);
+      await syncService.pullAll(authUser.id);
+      setLastSyncTime(new Date());
+    } catch (error) {
+      Alert.alert('Sync Failed', 'Could not sync data. Please try again.');
+    } finally {
+      setIsSyncing(false);
+    }
+  }, [authUser, isSyncing]);
+
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <ScrollView
@@ -276,8 +349,11 @@ const Profile: React.FC = () => {
           >
             <Text style={styles.avatarText}>{user.name.charAt(0)}</Text>
           </LinearGradient>
-          <View>
+          <View style={{ flex: 1 }}>
             <Text style={styles.profileName}>{user.name} Johnson</Text>
+            {authUser?.email && (
+              <Text style={styles.profileEmail}>{authUser.email}</Text>
+            )}
             <Text style={styles.profileMember}>Member since {user.memberSince}</Text>
           </View>
         </View>
@@ -403,6 +479,36 @@ const Profile: React.FC = () => {
           </View>
         </View>
 
+        {/* Cloud Sync */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>CLOUD SYNC</Text>
+          <View style={styles.card}>
+            <TouchableOpacity
+              onPress={handleSync}
+              disabled={isSyncing}
+              style={styles.menuItem}
+              activeOpacity={0.7}
+            >
+              <View style={commonStyles.row}>
+                <Ionicons name="cloud-outline" size={20} color={colors.neutral400} />
+                <Text style={styles.menuLabel}>Sync Now</Text>
+              </View>
+              <View style={commonStyles.row}>
+                {isSyncing ? (
+                  <ActivityIndicator size="small" color={colors.mint} />
+                ) : lastSyncTime ? (
+                  <Text style={styles.menuValue}>
+                    {lastSyncTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </Text>
+                ) : (
+                  <Text style={styles.menuValue}>Not synced</Text>
+                )}
+                <Ionicons name="chevron-forward" size={16} color={colors.neutral600} />
+              </View>
+            </TouchableOpacity>
+          </View>
+        </View>
+
         {/* Data */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>DATA</Text>
@@ -439,9 +545,31 @@ const Profile: React.FC = () => {
         </View>
 
         {/* Sign Out */}
-        <TouchableOpacity style={styles.signOutBtn} activeOpacity={0.7}>
-          <Ionicons name="log-out-outline" size={18} color={colors.danger} />
-          <Text style={styles.signOutText}>Sign Out</Text>
+        <TouchableOpacity 
+          style={styles.signOutBtn} 
+          activeOpacity={0.7}
+          onPress={handleSignOut}
+          disabled={authLoading}
+        >
+          {authLoading ? (
+            <ActivityIndicator size="small" color={colors.danger} />
+          ) : (
+            <>
+              <Ionicons name="log-out-outline" size={18} color={colors.danger} />
+              <Text style={styles.signOutText}>Sign Out</Text>
+            </>
+          )}
+        </TouchableOpacity>
+
+        {/* Delete Account */}
+        <TouchableOpacity 
+          style={styles.deleteAccountBtn} 
+          activeOpacity={0.7}
+          onPress={handleDeleteAccount}
+          disabled={authLoading}
+        >
+          <Ionicons name="trash-outline" size={16} color={colors.neutral500} />
+          <Text style={styles.deleteAccountText}>Delete Account</Text>
         </TouchableOpacity>
 
         <Text style={styles.version}>Foresight v2.1.0 (Build 2025)</Text>
@@ -491,6 +619,11 @@ const styles = StyleSheet.create({
   profileMember: {
     fontSize: typography.fontSizes.sm,
     color: colors.neutral500,
+  },
+  profileEmail: {
+    fontSize: typography.fontSizes.sm,
+    color: colors.neutral400,
+    marginBottom: spacing[1],
   },
   section: {
     marginBottom: spacing[6],
@@ -617,6 +750,18 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSizes.base,
     fontWeight: typography.fontWeights.medium,
     color: colors.danger,
+  },
+  deleteAccountBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing[2],
+    paddingVertical: spacing[3],
+    marginTop: spacing[1],
+  },
+  deleteAccountText: {
+    fontSize: typography.fontSizes.sm,
+    color: colors.neutral500,
   },
   version: {
     fontSize: typography.fontSizes.xs,
