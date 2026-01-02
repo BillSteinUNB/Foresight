@@ -42,3 +42,6 @@ export const STORAGE_PREFIX = '@foresight';
 export const getStorageKey = (storeName: string): string => {
   return `${STORAGE_PREFIX}/${storeName}`;
 };
+
+// Re-export encrypted storage for convenience
+export { encryptedStorage, hybridStorage, isSecureStorageAvailable, getStorageSecurityStatus } from './encryptedStorage';

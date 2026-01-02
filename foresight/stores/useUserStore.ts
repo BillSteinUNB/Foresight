@@ -1,7 +1,8 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { User, UserPreferences, NotificationSettings, BillReminderPreferences } from '../types';
-import { zustandStorage, getStorageKey } from './storage';
+import { getStorageKey } from './storage';
+import { encryptedStorage } from './encryptedStorage';
 import { DEFAULT_BILL_REMINDER_PREFS } from '../utils/notifications';
 
 // Default user state for new users (empty/production defaults)
@@ -140,7 +141,7 @@ export const useUserStore = create<UserStore>()(
     }),
     {
       name: getStorageKey('user'),
-      storage: createJSONStorage(() => zustandStorage),
+      storage: createJSONStorage(() => encryptedStorage),
       partialize: (state) => ({
         user: state.user,
         preferences: state.preferences,

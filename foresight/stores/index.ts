@@ -8,7 +8,15 @@
  */
 
 // Storage utilities
-export { zustandStorage, getStorageKey, STORAGE_PREFIX } from './storage';
+export { 
+  zustandStorage, 
+  getStorageKey, 
+  STORAGE_PREFIX,
+  encryptedStorage,
+  hybridStorage,
+  isSecureStorageAvailable,
+  getStorageSecurityStatus,
+} from './storage';
 
 // Transaction store
 export {

@@ -1,7 +1,8 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { SavingsGoal } from '../types';
-import { zustandStorage, getStorageKey } from './storage';
+import { getStorageKey } from './storage';
+import { encryptedStorage } from './encryptedStorage';
 
 interface GoalState {
   goals: SavingsGoal[];
@@ -99,7 +100,7 @@ export const useGoalStore = create<GoalStore>()(
     }),
     {
       name: getStorageKey('goals'),
-      storage: createJSONStorage(() => zustandStorage),
+      storage: createJSONStorage(() => encryptedStorage),
       partialize: (state) => ({
         goals: state.goals,
       }),

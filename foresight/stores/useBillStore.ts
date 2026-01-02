@@ -1,7 +1,8 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { Bill, BillReminderPreferences } from '../types';
-import { zustandStorage, getStorageKey } from './storage';
+import { getStorageKey } from './storage';
+import { encryptedStorage } from './encryptedStorage';
 import { getBillStatus } from '../utils/billUtils';
 import { scheduleBillReminder, cancelNotifications, DEFAULT_BILL_REMINDER_PREFS } from '../utils/notifications';
 
@@ -178,7 +179,7 @@ export const useBillStore = create<BillStore>()(
     }),
     {
       name: getStorageKey('bills'),
-      storage: createJSONStorage(() => zustandStorage),
+      storage: createJSONStorage(() => encryptedStorage),
       partialize: (state) => ({
         bills: state.bills,
       }),
