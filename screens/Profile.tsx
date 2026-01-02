@@ -1,12 +1,12 @@
 import React, { useState, useCallback, useEffect } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator, Alert, TextInput, Modal, Image, TouchableWithoutFeedback } from 'react-native';
 import { MotiView, AnimatePresence } from 'moti';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
+import * as ImagePicker from 'expo-image-picker';
 
 import { useApp } from '../context/AppContext';
-import { LINKED_ACCOUNTS } from '../mockData';
 import { formatCurrency } from '../utils';
 import { exportData, ExportFormat } from '../utils/exportData';
 import { colors, spacing, borderRadius, typography, commonStyles } from '../theme';
@@ -181,7 +181,7 @@ const BillReminderSettings: React.FC<BillReminderSettingsProps> = ({ prefs, onUp
 
 const Profile: React.FC = () => {
   const insets = useSafeAreaInsets();
-  const { user, preferences, transactions, goals, bills, updatePreferences, updateNotificationPreference } = useApp();
+  const { user, preferences, transactions, goals, bills, updateUser, updatePreferences, updateNotificationPreference } = useApp();
   const { user: authUser, signOut, deleteAccount, isLoading: authLoading } = useAuthStore();
   const [isExporting, setIsExporting] = useState(false);
   const [exportSuccess, setExportSuccess] = useState(false);
@@ -190,6 +190,9 @@ const Profile: React.FC = () => {
   const [biometricName, setBiometricName] = useState('Biometrics');
   const [isSyncing, setIsSyncing] = useState(false);
   const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null);
+  const [showAvatarModal, setShowAvatarModal] = useState(false);
+  const [showNetWorthModal, setShowNetWorthModal] = useState(false);
+  const [netWorthInput, setNetWorthInput] = useState('');
 
   // Check biometric availability on mount
   useEffect(() => {
@@ -340,6 +343,75 @@ const Profile: React.FC = () => {
     }
   }, [authUser, isSyncing]);
 
+  const handleAvatarPick = useCallback(async (source: 'camera' | 'gallery') => {
+    try {
+      let result;
+      
+      if (source === 'camera') {
+        const permission = await ImagePicker.requestCameraPermissionsAsync();
+        if (!permission.granted) {
+          Alert.alert('Permission Required', 'Camera permission is required to take photos.');
+          return;
+        }
+        result = await ImagePicker.launchCameraAsync({
+          mediaTypes: ImagePicker.MediaTypeOptions.Images,
+          allowsEditing: true,
+          aspect: [1, 1],
+          quality: 0.8,
+        });
+      } else {
+        const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (!permission.granted) {
+          Alert.alert('Permission Required', 'Photo library permission is required to select photos.');
+          return;
+        }
+        result = await ImagePicker.launchImageLibraryAsync({
+          mediaTypes: ImagePicker.MediaTypeOptions.Images,
+          allowsEditing: true,
+          aspect: [1, 1],
+          quality: 0.8,
+        });
+      }
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const uri = result.assets[0].uri;
+        updateUser({ avatarUri: uri });
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Failed to select image. Please try again.');
+    } finally {
+      setShowAvatarModal(false);
+    }
+  }, [updateUser]);
+
+  const handleRemoveAvatar = useCallback(() => {
+    Alert.alert(
+      'Remove Photo',
+      'Are you sure you want to remove your profile photo?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: () => {
+            updateUser({ avatarUri: null });
+            setShowAvatarModal(false);
+          },
+        },
+      ]
+    );
+  }, [updateUser]);
+
+  const handleSaveNetWorth = useCallback(() => {
+    const amount = parseFloat(netWorthInput.replace(/[^0-9.-]/g, ''));
+    if (isNaN(amount) || amount < 0) {
+      Alert.alert('Invalid Amount', 'Please enter a valid number.');
+      return;
+    }
+    updateUser({ netWorth: amount });
+    setShowNetWorthModal(false);
+  }, [netWorthInput, updateUser]);
+
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <ScrollView
@@ -349,16 +421,29 @@ const Profile: React.FC = () => {
       >
         {/* Profile Header */}
         <View style={styles.profileHeader}>
-          <LinearGradient
-            colors={[colors.mint, colors.blue400]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.avatar}
-          >
-            <Text style={styles.avatarText}>{user.name.charAt(0)}</Text>
-          </LinearGradient>
+          <TouchableOpacity onPress={() => setShowAvatarModal(true)} style={styles.avatarContainer}>
+            {user.avatarUri ? (
+              <Image source={{ uri: user.avatarUri }} style={styles.avatarImage} />
+            ) : (
+              <LinearGradient
+                colors={[colors.mint, colors.blue400]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.avatar}
+              >
+                <Text style={styles.avatarText}>
+                  {user.firstName ? user.firstName.charAt(0).toUpperCase() : '?'}
+                </Text>
+              </LinearGradient>
+            )}
+            <View style={styles.avatarEditBadge}>
+              <Ionicons name="camera" size={12} color={colors.black} />
+            </View>
+          </TouchableOpacity>
           <View style={{ flex: 1 }}>
-            <Text style={styles.profileName}>{user.name} Johnson</Text>
+            <Text style={styles.profileName}>
+              {user.firstName || 'User'}
+            </Text>
             {authUser?.email && (
               <Text style={styles.profileEmail}>{authUser.email}</Text>
             )}
@@ -366,41 +451,32 @@ const Profile: React.FC = () => {
           </View>
         </View>
 
-        {/* Linked Accounts */}
+        {/* Net Worth */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>LINKED ACCOUNTS</Text>
+          <Text style={styles.sectionTitle}>NET WORTH</Text>
           <View style={styles.card}>
-            {LINKED_ACCOUNTS.map((account, index) => (
-              <View
-                key={account.id}
-                style={[styles.accountItem, index !== LINKED_ACCOUNTS.length - 1 && styles.borderBottom]}
-              >
-                <View style={commonStyles.row}>
-                  <View style={styles.accountLogo}>
-                    <Ionicons name="card" size={20} color={colors.neutral600} />
-                  </View>
-                  <View>
-                    <Text style={styles.accountName}>{account.institutionName}</Text>
-                    <Text style={styles.accountType}>
-                      {account.accountType} ••••{account.lastFour}
-                    </Text>
-                  </View>
+            <View style={styles.netWorthItem}>
+              <View style={commonStyles.row}>
+                <View style={styles.netWorthIcon}>
+                  <Ionicons name="wallet-outline" size={20} color={colors.mint} />
                 </View>
-                <View style={styles.accountBalance}>
-                  <Text style={[styles.balanceAmount, account.balance < 0 && { color: colors.danger }]}>
-                    {formatCurrency(account.balance)}
-                  </Text>
-                  <View style={commonStyles.row}>
-                    <Ionicons name="refresh" size={10} color={colors.neutral500} />
-                    <Text style={styles.syncText}>Just now</Text>
-                  </View>
+                <View>
+                  <Text style={styles.netWorthLabel}>Total Net Worth</Text>
+                  <Text style={styles.netWorthAmount}>{formatCurrency(user.netWorth || 0)}</Text>
                 </View>
               </View>
-            ))}
-            <TouchableOpacity style={styles.addAccountBtn} activeOpacity={0.7} accessibilityLabel="Link new account" accessibilityRole="button">
-              <Ionicons name="add" size={18} color={colors.mint} />
-              <Text style={styles.addAccountText}>Link New Account</Text>
-            </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => {
+                  setNetWorthInput((user.netWorth || 0).toString());
+                  setShowNetWorthModal(true);
+                }}
+                style={styles.editNetWorthBtn}
+                accessibilityLabel="Edit net worth"
+                accessibilityRole="button"
+              >
+                <Ionicons name="create-outline" size={18} color={colors.mint} />
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
 
@@ -589,6 +665,118 @@ const Profile: React.FC = () => {
         </TouchableOpacity>
 
         <Text style={styles.version}>Foresight v2.1.0 (Build 2025)</Text>
+
+        {/* Avatar Picker Modal */}
+        <Modal
+          visible={showAvatarModal}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setShowAvatarModal(false)}
+        >
+          <TouchableOpacity
+            style={styles.modalOverlay}
+            activeOpacity={1}
+            onPress={() => setShowAvatarModal(false)}
+          >
+            <TouchableWithoutFeedback>
+              <View style={styles.modalContent}>
+                <Text style={styles.modalTitle}>Profile Photo</Text>
+                
+                <TouchableOpacity
+                  style={styles.modalOption}
+                  onPress={() => handleAvatarPick('camera')}
+                  accessibilityLabel="Take photo"
+                  accessibilityRole="button"
+                >
+                  <Ionicons name="camera-outline" size={22} color={colors.white} />
+                  <Text style={styles.modalOptionText}>Take Photo</Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity
+                  style={styles.modalOption}
+                  onPress={() => handleAvatarPick('gallery')}
+                  accessibilityLabel="Choose from library"
+                  accessibilityRole="button"
+                >
+                  <Ionicons name="images-outline" size={22} color={colors.white} />
+                  <Text style={styles.modalOptionText}>Choose from Library</Text>
+                </TouchableOpacity>
+                
+                {user.avatarUri && (
+                  <TouchableOpacity
+                    style={[styles.modalOption, styles.modalOptionDanger]}
+                    onPress={handleRemoveAvatar}
+                    accessibilityLabel="Remove photo"
+                    accessibilityRole="button"
+                  >
+                    <Ionicons name="trash-outline" size={22} color={colors.danger} />
+                    <Text style={[styles.modalOptionText, styles.modalOptionTextDanger]}>Remove Photo</Text>
+                  </TouchableOpacity>
+                )}
+                
+                <TouchableOpacity
+                  style={styles.modalCancel}
+                  onPress={() => setShowAvatarModal(false)}
+                  accessibilityLabel="Cancel"
+                  accessibilityRole="button"
+                >
+                  <Text style={styles.modalCancelText}>Cancel</Text>
+                </TouchableOpacity>
+              </View>
+            </TouchableWithoutFeedback>
+          </TouchableOpacity>
+        </Modal>
+
+        {/* Net Worth Modal */}
+        <Modal
+          visible={showNetWorthModal}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setShowNetWorthModal(false)}
+        >
+          <TouchableOpacity
+            style={styles.modalOverlay}
+            activeOpacity={1}
+            onPress={() => setShowNetWorthModal(false)}
+          >
+            <TouchableWithoutFeedback>
+              <View style={styles.modalContent}>
+                <Text style={styles.modalTitle}>Update Net Worth</Text>
+                
+                <View style={styles.netWorthInputContainer}>
+                  <Text style={styles.currencySymbol}>$</Text>
+                  <TextInput
+                    style={styles.netWorthInput}
+                    value={netWorthInput}
+                    onChangeText={setNetWorthInput}
+                    keyboardType="numeric"
+                    placeholder="0.00"
+                    placeholderTextColor={colors.neutral600}
+                    autoFocus
+                  />
+                </View>
+                
+                <TouchableOpacity
+                  style={styles.modalSaveBtn}
+                  onPress={handleSaveNetWorth}
+                  accessibilityLabel="Save net worth"
+                  accessibilityRole="button"
+                >
+                  <Text style={styles.modalSaveBtnText}>Save</Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity
+                  style={styles.modalCancel}
+                  onPress={() => setShowNetWorthModal(false)}
+                  accessibilityLabel="Cancel"
+                  accessibilityRole="button"
+                >
+                  <Text style={styles.modalCancelText}>Cancel</Text>
+                </TouchableOpacity>
+              </View>
+            </TouchableWithoutFeedback>
+          </TouchableOpacity>
+        </Modal>
       </ScrollView>
     </View>
   );
@@ -613,6 +801,9 @@ const styles = StyleSheet.create({
     marginTop: spacing[4],
     marginBottom: spacing[8],
   },
+  avatarContainer: {
+    position: 'relative',
+  },
   avatar: {
     width: 80,
     height: 80,
@@ -621,6 +812,26 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderWidth: 4,
     borderColor: colors.surface200,
+  },
+  avatarImage: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    borderWidth: 4,
+    borderColor: colors.surface200,
+  },
+  avatarEditBadge: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: colors.mint,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: colors.black,
   },
   avatarText: {
     fontSize: 30,
@@ -784,6 +995,120 @@ const styles = StyleSheet.create({
     color: colors.neutral600,
     textAlign: 'center',
     marginTop: spacing[4],
+  },
+  // Net Worth styles
+  netWorthItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: spacing[4],
+  },
+  netWorthIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: 'rgba(0, 217, 165, 0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: spacing[3],
+  },
+  netWorthLabel: {
+    fontSize: typography.fontSizes.sm,
+    color: colors.neutral500,
+    marginBottom: spacing[1],
+  },
+  netWorthAmount: {
+    fontSize: typography.fontSizes['2xl'],
+    fontWeight: typography.fontWeights.bold,
+    color: colors.mint,
+    fontFamily: 'monospace',
+  },
+  editNetWorthBtn: {
+    padding: spacing[2],
+  },
+  // Modal styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    backgroundColor: colors.surface200,
+    borderRadius: borderRadius['2xl'],
+    padding: spacing[6],
+    width: '85%',
+    maxWidth: 340,
+  },
+  modalTitle: {
+    fontSize: typography.fontSizes.lg,
+    fontWeight: typography.fontWeights.bold,
+    color: colors.white,
+    textAlign: 'center',
+    marginBottom: spacing[5],
+  },
+  modalOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: spacing[4],
+    borderRadius: borderRadius.lg,
+    gap: spacing[3],
+  },
+  modalOptionDanger: {
+    backgroundColor: 'rgba(255, 59, 92, 0.1)',
+  },
+  modalOptionText: {
+    fontSize: typography.fontSizes.base,
+    color: colors.white,
+    fontWeight: typography.fontWeights.medium,
+  },
+  modalOptionTextDanger: {
+    color: colors.danger,
+  },
+  modalCancel: {
+    padding: spacing[4],
+    alignItems: 'center',
+    marginTop: spacing[2],
+    borderTopWidth: 1,
+    borderTopColor: colors.surface300,
+  },
+  modalCancelText: {
+    fontSize: typography.fontSizes.base,
+    color: colors.neutral400,
+    fontWeight: typography.fontWeights.medium,
+  },
+  modalSaveBtn: {
+    backgroundColor: colors.mint,
+    borderRadius: borderRadius.xl,
+    padding: spacing[4],
+    alignItems: 'center',
+    marginTop: spacing[4],
+  },
+  modalSaveBtnText: {
+    color: colors.black,
+    fontSize: typography.fontSizes.base,
+    fontWeight: typography.fontWeights.bold,
+  },
+  netWorthInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surface300,
+    borderRadius: borderRadius.xl,
+    paddingHorizontal: spacing[4],
+    height: 56,
+  },
+  currencySymbol: {
+    fontSize: typography.fontSizes.xl,
+    color: colors.mint,
+    fontWeight: typography.fontWeights.bold,
+    marginRight: spacing[2],
+  },
+  netWorthInput: {
+    flex: 1,
+    color: colors.white,
+    fontSize: typography.fontSizes.xl,
+    fontWeight: typography.fontWeights.bold,
+    fontFamily: 'monospace',
   },
   // Bill Reminder Settings styles
   reminderSettings: {

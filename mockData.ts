@@ -1,7 +1,9 @@
 import { Transaction, SavingsGoal, Bill, Insight, User, LinkedAccount, UserPreferences } from './types';
 
 export const USER: User = {
-  name: "Alex",
+  firstName: "Alex",
+  name: "Johnson",
+  avatarUri: null,
   safeToSpend: 2847.00,
   balance: 4782.45,
   financialHealthScore: 78,

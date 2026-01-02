@@ -7,7 +7,9 @@ import { DEFAULT_BILL_REMINDER_PREFS } from '../utils/notifications';
 
 // Default user state for new users (empty/production defaults)
 const DEFAULT_USER: User = {
+  firstName: '',
   name: '',
+  avatarUri: null,
   safeToSpend: 0,
   balance: 0,
   financialHealthScore: 0,

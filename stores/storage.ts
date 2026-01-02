@@ -33,14 +33,16 @@ export const zustandStorage: StateStorage = {
 
 /**
  * Storage key prefix for all Zustand stores
+ * Note: SecureStore only allows alphanumeric, ".", "-", and "_" characters
  */
-export const STORAGE_PREFIX = '@foresight';
+export const STORAGE_PREFIX = 'foresight';
 
 /**
  * Generate a storage key for a specific store
+ * Uses underscore separator for SecureStore compatibility
  */
 export const getStorageKey = (storeName: string): string => {
-  return `${STORAGE_PREFIX}/${storeName}`;
+  return `${STORAGE_PREFIX}_${storeName}`;
 };
 
 // Re-export encrypted storage for convenience

@@ -70,7 +70,9 @@ export interface Insight {
 }
 
 export interface User {
+  firstName: string;
   name: string;
+  avatarUri: string | null;
   safeToSpend: number;
   balance: number;
   financialHealthScore: number;

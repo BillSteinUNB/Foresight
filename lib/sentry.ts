@@ -13,7 +13,18 @@ import * as Sentry from '@sentry/react-native';
  * - Or set it in app.config.js using process.env.SENTRY_DSN
  */
 export const initSentry = () => {
-  const dsn = process.env.SENTRY_DSN || 'https://your-dsn@sentry.io/your-project-id';
+  const dsn = process.env.SENTRY_DSN || '';
+  
+  // Skip initialization if no valid DSN is configured
+  const isValidDsn = dsn && !dsn.includes('your-dsn') && !dsn.includes('your-project-id');
+  
+  if (!isValidDsn) {
+    // Silently skip Sentry in development or when not configured
+    if (__DEV__) {
+      console.log('Sentry: Skipping initialization (no valid DSN configured)');
+    }
+    return;
+  }
   
   Sentry.init({
     dsn,

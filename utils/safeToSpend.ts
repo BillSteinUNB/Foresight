@@ -4,15 +4,6 @@ import { useGoalStore, selectRemainingToSave } from '../stores/useGoalStore';
 import { useBudgetStore, selectTotalBudgeted } from '../stores/useBudgetStore';
 
 /**
- * Calculate the remaining amount to save for all goals
- * (target amount - current amount for incomplete goals)
- */
-export const selectRemainingToSave = (state: import('../stores/useGoalStore').GoalStore) =>
-  state.goals
-    .filter((g) => g.currentAmount < g.targetAmount)
-    .reduce((sum, g) => sum + (g.targetAmount - g.currentAmount), 0);
-
-/**
  * Calculate the recommended monthly savings amount
  * This is spread across all active goals
  */

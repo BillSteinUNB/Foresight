@@ -20,6 +20,7 @@ import { colors, typography, spacing, borderRadius, commonStyles } from '../them
 
 export default function AuthScreen() {
   const [isSignUp, setIsSignUp] = useState(false);
+  const [firstName, setFirstName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -41,6 +42,11 @@ export default function AuthScreen() {
     clearError();
     setSuccessMessage(null);
 
+    if (isSignUp && !firstName.trim()) {
+      Alert.alert('Error', 'Please enter your first name');
+      return;
+    }
+
     if (!email || !password) {
       Alert.alert('Error', 'Please fill in all fields');
       return;
@@ -57,7 +63,7 @@ export default function AuthScreen() {
     }
 
     if (isSignUp) {
-      const { error } = await signUp(email, password);
+      const { error } = await signUp(email, password, firstName.trim());
       if (!error) {
         setSuccessMessage('Account created! Please check your email to confirm your account.');
         // Optionally switch to sign in or just show success
@@ -123,6 +129,25 @@ export default function AuthScreen() {
                 <View style={[styles.messageContainer, styles.successContainer]}>
                   <Ionicons name="checkmark-circle" size={20} color={colors.mint} />
                   <Text style={styles.successText}>{successMessage}</Text>
+                </View>
+              )}
+
+              {/* First Name Input (Sign Up only) */}
+              {isSignUp && (
+                <View style={styles.inputGroup}>
+                  <Text style={styles.label}>First Name</Text>
+                  <View style={styles.inputWrapper}>
+                    <Ionicons name="person-outline" size={20} color={colors.neutral500} style={styles.inputIcon} />
+                    <TextInput
+                      style={styles.input}
+                      placeholder="Enter your first name"
+                      placeholderTextColor={colors.neutral600}
+                      value={firstName}
+                      onChangeText={setFirstName}
+                      autoCapitalize="words"
+                      autoCorrect={false}
+                    />
+                  </View>
                 </View>
               )}
 

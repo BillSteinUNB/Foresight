@@ -124,7 +124,7 @@ export {
   getHealthScoreInfo,
   shouldRecalculateScore,
   type HealthScoreInputs,
-} from './healthScore';
+} from './utils/healthScore';
 
 // Re-export validation utilities
 export {
@@ -133,4 +133,4 @@ export {
   validateGoalInput,
   ValidationError,
   type ValidationResult,
-} from './validation';
+} from './utils/validation';

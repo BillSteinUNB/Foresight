@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { Session, User, AuthError } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
+import { useUserStore } from './useUserStore';
 
 interface AuthState {
   session: Session | null;
@@ -12,7 +13,7 @@ interface AuthState {
 
 interface AuthActions {
   initialize: () => Promise<void>;
-  signUp: (email: string, password: string) => Promise<{ error: AuthError | null }>;
+  signUp: (email: string, password: string, firstName: string) => Promise<{ error: AuthError | null }>;
   signIn: (email: string, password: string) => Promise<{ error: AuthError | null }>;
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<{ error: AuthError | null }>;
@@ -68,17 +69,33 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
     }
   },
 
-  signUp: async (email: string, password: string) => {
+  signUp: async (email: string, password: string, firstName: string) => {
     set({ isLoading: true, error: null });
 
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
+      options: {
+        data: {
+          first_name: firstName,
+        },
+      },
     });
 
     if (error) {
       set({ isLoading: false, error: error.message });
       return { error };
+    }
+
+    // Initialize user store with firstName and defaults
+    if (data.user) {
+      const { updateUser } = useUserStore.getState();
+      updateUser({
+        firstName,
+        avatarUri: null,
+        netWorth: 0,
+        memberSince: new Date().getFullYear(),
+      });
     }
 
     set({
