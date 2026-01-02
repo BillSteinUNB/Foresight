@@ -88,6 +88,9 @@ const Dashboard: React.FC = () => {
     setIsBillModalOpen(false);
   }, [addBill]);
 
+  // Hardcoded for demo
+  const hardcodedSafeToSpend = 547.01;
+
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <ScrollView 
@@ -116,7 +119,7 @@ const Dashboard: React.FC = () => {
         >
           <View style={styles.heroGlow} />
           <Text style={styles.heroLabel}>SAFE TO SPEND</Text>
-          <Text style={styles.heroAmount}>{formatCurrency(safeToSpend)}</Text>
+          <Text style={styles.heroAmount}>{formatCurrency(hardcodedSafeToSpend)}</Text>
           <Text style={styles.heroSubtext}>
             until end of month{' '}
             <View style={styles.daysChip}>
@@ -139,7 +142,7 @@ const Dashboard: React.FC = () => {
             <View style={styles.breakdownItem}>
               <Text style={styles.breakdownLabel}>Safe</Text>
               <Text style={[styles.breakdownValue, { color: colors.mint }]}>
-                {formatCompactCurrency(safeToSpend)}
+                {formatCompactCurrency(hardcodedSafeToSpend)}
               </Text>
             </View>
           </View>

@@ -444,9 +444,6 @@ const Profile: React.FC = () => {
             <Text style={styles.profileName}>
               {user.firstName || 'User'}
             </Text>
-            {authUser?.email && (
-              <Text style={styles.profileEmail}>{authUser.email}</Text>
-            )}
             <Text style={styles.profileMember}>Member since {user.memberSince}</Text>
           </View>
         </View>
@@ -484,7 +481,11 @@ const Profile: React.FC = () => {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>ACCOUNT</Text>
           <View style={styles.card}>
-            <MenuItem icon="person-outline" label="Personal Info" />
+            <MenuItem 
+              icon="person-outline" 
+              label="Personal Info" 
+              value={authUser?.email || ''} 
+            />
             <MenuItem icon="shield-outline" label="Privacy & Security" />
           </View>
         </View>
