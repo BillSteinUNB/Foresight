@@ -24,7 +24,7 @@ interface MenuItemProps {
 }
 
 const MenuItem: React.FC<MenuItemProps> = ({ icon, label, value, onPress }) => (
-  <TouchableOpacity onPress={onPress} style={styles.menuItem} activeOpacity={0.7}>
+  <TouchableOpacity onPress={onPress} style={styles.menuItem} activeOpacity={0.7} accessibilityLabel={label} accessibilityRole="button">
     <View style={commonStyles.row}>
       <Ionicons name={icon} size={20} color={colors.neutral400} />
       <Text style={styles.menuLabel}>{label}</Text>
@@ -53,6 +53,8 @@ const ToggleItem: React.FC<ToggleItemProps> = ({ icon, label, enabled, onToggle 
       onPress={onToggle}
       style={[styles.toggle, enabled && styles.toggleActive]}
       activeOpacity={0.8}
+      accessibilityLabel={`Toggle ${label}`}
+      accessibilityRole="button"
     >
       <MotiView
         animate={{ translateX: enabled ? 20 : 0 }}
@@ -94,6 +96,8 @@ const BillReminderSettings: React.FC<BillReminderSettingsProps> = ({ prefs, onUp
           onPress={() => onUpdate({ enabled: !prefs.enabled })}
           style={[styles.toggle, prefs.enabled && styles.toggleActive]}
           activeOpacity={0.8}
+          accessibilityLabel="Toggle enable reminders"
+          accessibilityRole="button"
         >
           <MotiView
             animate={{ translateX: prefs.enabled ? 20 : 0 }}
@@ -123,6 +127,8 @@ const BillReminderSettings: React.FC<BillReminderSettingsProps> = ({ prefs, onUp
                       prefs.daysBeforeDue === days && styles.optionPillActive,
                     ]}
                     activeOpacity={0.7}
+                    accessibilityLabel={`Set reminder to ${days} days before`}
+                    accessibilityRole="button"
                   >
                     <Text
                       style={[
@@ -151,6 +157,8 @@ const BillReminderSettings: React.FC<BillReminderSettingsProps> = ({ prefs, onUp
                       prefs.timeOfDay.hour === hour && styles.optionPillActive,
                     ]}
                     activeOpacity={0.7}
+                    accessibilityLabel={`Set reminder time to ${label}`}
+                    accessibilityRole="button"
                   >
                     <Text
                       style={[
@@ -389,7 +397,7 @@ const Profile: React.FC = () => {
                 </View>
               </View>
             ))}
-            <TouchableOpacity style={styles.addAccountBtn} activeOpacity={0.7}>
+            <TouchableOpacity style={styles.addAccountBtn} activeOpacity={0.7} accessibilityLabel="Link new account" accessibilityRole="button">
               <Ionicons name="add" size={18} color={colors.mint} />
               <Text style={styles.addAccountText}>Link New Account</Text>
             </TouchableOpacity>
@@ -488,6 +496,8 @@ const Profile: React.FC = () => {
               disabled={isSyncing}
               style={styles.menuItem}
               activeOpacity={0.7}
+              accessibilityLabel="Sync now"
+              accessibilityRole="button"
             >
               <View style={commonStyles.row}>
                 <Ionicons name="cloud-outline" size={20} color={colors.neutral400} />
@@ -518,6 +528,8 @@ const Profile: React.FC = () => {
               disabled={isExporting}
               style={[styles.menuItem, styles.borderBottom]}
               activeOpacity={0.7}
+              accessibilityLabel="Export all data"
+              accessibilityRole="button"
             >
               <View style={commonStyles.row}>
                 <Ionicons name="download-outline" size={20} color={colors.neutral400} />
@@ -550,6 +562,8 @@ const Profile: React.FC = () => {
           activeOpacity={0.7}
           onPress={handleSignOut}
           disabled={authLoading}
+          accessibilityLabel="Sign out"
+          accessibilityRole="button"
         >
           {authLoading ? (
             <ActivityIndicator size="small" color={colors.danger} />
@@ -567,6 +581,8 @@ const Profile: React.FC = () => {
           activeOpacity={0.7}
           onPress={handleDeleteAccount}
           disabled={authLoading}
+          accessibilityLabel="Delete account"
+          accessibilityRole="button"
         >
           <Ionicons name="trash-outline" size={16} color={colors.neutral500} />
           <Text style={styles.deleteAccountText}>Delete Account</Text>

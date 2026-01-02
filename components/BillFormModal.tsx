@@ -133,7 +133,7 @@ const BillFormModal: React.FC<Props> = ({
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.overlay}
       >
-        <TouchableOpacity style={styles.backdrop} onPress={onClose} activeOpacity={1} />
+        <TouchableOpacity style={styles.backdrop} onPress={onClose} activeOpacity={1} accessibilityLabel="Close modal" accessibilityRole="button" />
 
         <MotiView
           from={{ translateY: 300 }}
@@ -145,7 +145,7 @@ const BillFormModal: React.FC<Props> = ({
           {/* Header */}
           <View style={styles.header}>
             <Text style={styles.title}>{title}</Text>
-            <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
+            <TouchableOpacity onPress={onClose} style={styles.closeBtn} accessibilityLabel="Close" accessibilityRole="button">
               <Ionicons name="close" size={20} color={colors.neutral400} />
             </TouchableOpacity>
           </View>
@@ -193,6 +193,8 @@ const BillFormModal: React.FC<Props> = ({
                     [{ text: 'OK', onPress: () => {} }],
                   );
                 }}
+                accessibilityLabel="Select due date"
+                accessibilityRole="button"
               >
                 <View style={commonStyles.row}>
                   <Ionicons name="calendar-outline" size={20} color={colors.neutral400} />
@@ -213,18 +215,18 @@ const BillFormModal: React.FC<Props> = ({
 
           {/* Actions */}
           <View style={styles.actions}>
-            <TouchableOpacity onPress={onClose} style={styles.cancelBtn}>
+            <TouchableOpacity onPress={onClose} style={styles.cancelBtn} accessibilityLabel="Cancel" accessibilityRole="button">
               <Text style={styles.cancelBtnText}>Cancel</Text>
             </TouchableOpacity>
 
             {mode === 'edit' && (
-              <TouchableOpacity onPress={handleDelete} style={styles.deleteBtn}>
+              <TouchableOpacity onPress={handleDelete} style={styles.deleteBtn} accessibilityLabel="Delete bill" accessibilityRole="button">
                 <Ionicons name="trash-outline" size={18} color={colors.danger} />
                 <Text style={styles.deleteBtnText}>Delete</Text>
               </TouchableOpacity>
             )}
 
-            <TouchableOpacity onPress={handleSave} style={[styles.saveBtn, mode === 'edit' && styles.saveBtnEdit]}>
+            <TouchableOpacity onPress={handleSave} style={[styles.saveBtn, mode === 'edit' && styles.saveBtnEdit]} accessibilityLabel={saveButtonText} accessibilityRole="button">
               <Ionicons name="checkmark" size={18} color={colors.black} />
               <Text style={styles.saveBtnText}>{saveButtonText}</Text>
             </TouchableOpacity>

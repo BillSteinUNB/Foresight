@@ -161,6 +161,8 @@ export default function AuthScreen() {
                   <TouchableOpacity 
                     style={styles.eyeIcon} 
                     onPress={() => setShowPassword(!showPassword)}
+                    accessibilityLabel={showPassword ? "Hide password" : "Show password"}
+                    accessibilityRole="button"
                   >
                     <Ionicons 
                       name={showPassword ? "eye-off-outline" : "eye-outline"} 
@@ -177,6 +179,8 @@ export default function AuthScreen() {
                   style={styles.forgotPassword} 
                   onPress={handleForgotPassword}
                   disabled={isLoading}
+                  accessibilityLabel="Forgot password"
+                  accessibilityRole="button"
                 >
                   <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
                 </TouchableOpacity>
@@ -187,6 +191,9 @@ export default function AuthScreen() {
                 style={[styles.submitButton, isLoading && styles.submitButtonDisabled]}
                 onPress={handleSubmit}
                 disabled={isLoading}
+                accessibilityLabel={isSignUp ? "Create account" : "Sign in"}
+                accessibilityRole="button"
+                accessibilityState={{ disabled: isLoading }}
               >
                 {isLoading ? (
                   <ActivityIndicator color={colors.black} />
@@ -202,7 +209,7 @@ export default function AuthScreen() {
                 <Text style={styles.toggleText}>
                   {isSignUp ? "Already have an account? " : "Don't have an account? "}
                 </Text>
-                <TouchableOpacity onPress={() => setIsSignUp(!isSignUp)}>
+                <TouchableOpacity onPress={() => setIsSignUp(!isSignUp)} accessibilityLabel={isSignUp ? "Switch to sign in" : "Switch to sign up"} accessibilityRole="button">
                   <Text style={styles.toggleAction}>
                     {isSignUp ? "Sign In" : "Sign Up"}
                   </Text>

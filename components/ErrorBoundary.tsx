@@ -101,6 +101,8 @@ class ErrorBoundary extends Component<Props, State> {
                 style={styles.primaryButton}
                 onPress={this.handleRetry}
                 activeOpacity={0.8}
+                accessibilityLabel="Try Again"
+                accessibilityRole="button"
               >
                 <Ionicons name="refresh-outline" size={20} color={colors.black} />
                 <Text style={styles.primaryButtonText}>Try Again</Text>
@@ -111,6 +113,8 @@ class ErrorBoundary extends Component<Props, State> {
                   style={styles.secondaryButton}
                   onPress={this.handleGoHome}
                   activeOpacity={0.8}
+                  accessibilityLabel="Go Home"
+                  accessibilityRole="button"
                 >
                   <Ionicons name="home-outline" size={20} color={colors.mint} />
                   <Text style={styles.secondaryButtonText}>Go Home</Text>

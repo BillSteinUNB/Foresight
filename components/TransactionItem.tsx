@@ -36,12 +36,16 @@ const TransactionItem: React.FC<Props> = ({
     }
   };
 
+  const transactionDescription = `${transaction.merchantName}, ${isExpense ? 'payment of' : 'deposit of'} ${formatCurrency(transaction.amount)}, ${transaction.category.replace('_', ' ')}${transaction.status === 'pending' ? ', pending' : ''}`;
+
   return (
     <TouchableOpacity
       onPress={handlePress}
       onLongPress={onLongPress}
       style={[styles.container, selected && styles.selectedContainer]}
       activeOpacity={0.7}
+      accessibilityLabel={transactionDescription}
+      accessibilityRole="button"
     >
       {/* Selection Checkbox */}
       {selectionMode && (

@@ -192,6 +192,8 @@ const BudgetManager: React.FC<Props> = ({ isOpen, onClose }) => {
           style={styles.budgetItem} 
           onPress={() => handleEdit(budget)}
           activeOpacity={0.7}
+          accessibilityLabel={`Edit budget ${label}`}
+          accessibilityRole="button"
         >
           <View style={[styles.categoryIcon, { backgroundColor: `${color}20` }]}>
             <Text style={styles.emojiIcon}>{icon}</Text>
@@ -247,7 +249,7 @@ const BudgetManager: React.FC<Props> = ({ isOpen, onClose }) => {
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.overlay}
       >
-        <TouchableOpacity style={styles.backdrop} onPress={onClose} activeOpacity={1} />
+        <TouchableOpacity style={styles.backdrop} onPress={onClose} activeOpacity={1} accessibilityLabel="Close modal" accessibilityRole="button" />
 
         <MotiView
           from={{ translateY: 500 }}
@@ -259,7 +261,7 @@ const BudgetManager: React.FC<Props> = ({ isOpen, onClose }) => {
           {/* Header */}
           <View style={styles.header}>
             {viewMode === 'form' ? (
-              <TouchableOpacity onPress={() => setViewMode('list')} style={styles.iconBtn}>
+              <TouchableOpacity onPress={() => setViewMode('list')} style={styles.iconBtn} accessibilityLabel="Go back to list" accessibilityRole="button">
                 <Ionicons name="arrow-back" size={24} color={colors.white} />
               </TouchableOpacity>
             ) : (
@@ -272,7 +274,7 @@ const BudgetManager: React.FC<Props> = ({ isOpen, onClose }) => {
               {viewMode === 'list' ? 'Manage Budgets' : editingId ? 'Edit Budget' : 'New Budget'}
             </Text>
             
-            <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
+            <TouchableOpacity onPress={onClose} style={styles.closeBtn} accessibilityLabel="Close" accessibilityRole="button">
               <Ionicons name="close" size={20} color={colors.neutral400} />
             </TouchableOpacity>
           </View>
@@ -307,6 +309,8 @@ const BudgetManager: React.FC<Props> = ({ isOpen, onClose }) => {
                     onPress={handleAddStart}
                     style={styles.addBtn}
                     activeOpacity={0.8}
+                    accessibilityLabel="Add new budget"
+                    accessibilityRole="button"
                   >
                     <Ionicons name="add" size={24} color={colors.black} />
                     <Text style={styles.addBtnText}>Add New Budget</Text>
@@ -356,6 +360,8 @@ const BudgetManager: React.FC<Props> = ({ isOpen, onClose }) => {
                                 styles.categoryPill,
                                 isSelected && { backgroundColor: color, borderColor: color }
                               ]}
+                              accessibilityLabel={`Select category ${label}`}
+                              accessibilityRole="button"
                             >
                               <Text style={styles.emojiIconSmall}>{icon}</Text>
                               <Text style={[
@@ -407,6 +413,8 @@ const BudgetManager: React.FC<Props> = ({ isOpen, onClose }) => {
                             styles.thresholdBtn,
                             alertThreshold === opt && styles.thresholdBtnActive
                           ]}
+                          accessibilityLabel={`Set alert threshold to ${opt * 100}%`}
+                          accessibilityRole="button"
                         >
                           <Text style={[
                             styles.thresholdBtnText,
@@ -425,6 +433,8 @@ const BudgetManager: React.FC<Props> = ({ isOpen, onClose }) => {
                         onPress={handleDelete}
                         style={styles.deleteBtn}
                         activeOpacity={0.7}
+                        accessibilityLabel="Delete budget"
+                        accessibilityRole="button"
                       >
                         <Ionicons name="trash-outline" size={20} color={colors.danger} />
                       </TouchableOpacity>
@@ -434,6 +444,8 @@ const BudgetManager: React.FC<Props> = ({ isOpen, onClose }) => {
                       onPress={handleSave}
                       style={[styles.saveBtn, { flex: editingId ? 1 : 0, width: editingId ? 'auto' : '100%' }]}
                       activeOpacity={0.8}
+                      accessibilityLabel={editingId ? "Save changes" : "Create budget"}
+                      accessibilityRole="button"
                     >
                       <Text style={styles.saveBtnText}>
                         {editingId ? 'Save Changes' : 'Create Budget'}

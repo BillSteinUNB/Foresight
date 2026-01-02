@@ -185,6 +185,8 @@ const ReceiptPicker: React.FC<Props> = ({ receiptUri, onReceiptChange, transacti
           style={styles.previewContainer}
           onPress={() => setPreviewVisible(true)}
           activeOpacity={0.8}
+          accessibilityLabel="View receipt preview"
+          accessibilityRole="button"
         >
           <Image source={{ uri: receiptUri }} style={styles.previewImage} />
           <View style={styles.previewOverlay}>
@@ -195,6 +197,8 @@ const ReceiptPicker: React.FC<Props> = ({ receiptUri, onReceiptChange, transacti
           style={styles.removeBtn}
           onPress={handleRemoveReceipt}
           activeOpacity={0.7}
+          accessibilityLabel="Remove receipt"
+          accessibilityRole="button"
         >
           <Ionicons name="trash-outline" size={16} color={colors.danger} />
           <Text style={styles.removeBtnText}>Remove</Text>
@@ -220,6 +224,8 @@ const ReceiptPicker: React.FC<Props> = ({ receiptUri, onReceiptChange, transacti
             <TouchableOpacity 
               style={styles.closeFullScreenBtn}
               onPress={() => setPreviewVisible(false)}
+              accessibilityLabel="Close full screen preview"
+              accessibilityRole="button"
             >
               <Ionicons name="close" size={24} color={colors.white} />
             </TouchableOpacity>
@@ -235,6 +241,8 @@ const ReceiptPicker: React.FC<Props> = ({ receiptUri, onReceiptChange, transacti
         style={styles.addButton}
         onPress={showActionSheet}
         activeOpacity={0.7}
+        accessibilityLabel="Add receipt"
+        accessibilityRole="button"
       >
         <View style={styles.iconContainer}>
           <Ionicons name="receipt-outline" size={24} color={colors.neutral400} />

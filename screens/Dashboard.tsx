@@ -99,7 +99,7 @@ const Dashboard: React.FC = () => {
             <Text style={styles.greeting}>{greeting},</Text>
             <Text style={styles.userName}>{user.name}</Text>
           </View>
-          <TouchableOpacity style={styles.notificationBtn}>
+          <TouchableOpacity style={styles.notificationBtn} accessibilityLabel="View notifications" accessibilityRole="button">
             <Ionicons name="notifications-outline" size={20} color={colors.white} />
             <View style={styles.notificationDot} />
           </TouchableOpacity>
@@ -166,7 +166,7 @@ const Dashboard: React.FC = () => {
         <View style={styles.section}>
           <View style={commonStyles.rowBetween}>
             <Text style={styles.sectionTitle}>Upcoming Bills</Text>
-            <TouchableOpacity onPress={handleAddBill}>
+            <TouchableOpacity onPress={handleAddBill} accessibilityLabel="Add bill" accessibilityRole="button">
               <Text style={styles.addButton}>+ Add</Text>
             </TouchableOpacity>
           </View>
@@ -180,6 +180,8 @@ const Dashboard: React.FC = () => {
                 // Long press to show delete option (simple implementation)
                 handleDeleteBill(bill);
               }}
+              accessibilityLabel={`Edit bill ${bill.name}`}
+              accessibilityRole="button"
             >
               <View style={commonStyles.row}>
                 <View style={[
@@ -206,7 +208,7 @@ const Dashboard: React.FC = () => {
         <View style={styles.section}>
           <View style={commonStyles.rowBetween}>
             <Text style={styles.sectionTitle}>Savings Goals</Text>
-            <TouchableOpacity onPress={() => setIsAddGoalOpen(true)}>
+            <TouchableOpacity onPress={() => setIsAddGoalOpen(true)} accessibilityLabel="Add savings goal" accessibilityRole="button">
               <Text style={styles.addButton}>+ Add</Text>
             </TouchableOpacity>
           </View>
@@ -218,7 +220,7 @@ const Dashboard: React.FC = () => {
             {goals.map(goal => {
               const percentage = (goal.currentAmount / goal.targetAmount) * 100;
               return (
-                <TouchableOpacity key={goal.id} style={styles.goalCard} activeOpacity={0.8}>
+                <TouchableOpacity key={goal.id} style={styles.goalCard} activeOpacity={0.8} accessibilityLabel={`${goal.name}, ${Math.round(percentage)}% complete`} accessibilityRole="button">
                   <View style={styles.goalIconContainer}>
                     <LiquidGauge percentage={percentage} color={goal.color} size={80} />
                     <View style={styles.goalEmoji}>
@@ -234,6 +236,8 @@ const Dashboard: React.FC = () => {
               style={styles.addGoalCard}
               onPress={() => setIsAddGoalOpen(true)}
               activeOpacity={0.7}
+              accessibilityLabel="Add new savings goal"
+              accessibilityRole="button"
             >
               <Text style={styles.addGoalIcon}>➕</Text>
               <Text style={styles.addGoalText}>Add Goal</Text>
@@ -245,7 +249,7 @@ const Dashboard: React.FC = () => {
         <View style={styles.section}>
           <View style={commonStyles.rowBetween}>
             <Text style={styles.sectionTitle}>Recent Activity</Text>
-            <TouchableOpacity onPress={() => navigation.navigate('Activity')}>
+            <TouchableOpacity onPress={() => navigation.navigate('Activity')} accessibilityLabel="View all activity" accessibilityRole="button">
               <Text style={styles.viewAll}>View all</Text>
             </TouchableOpacity>
           </View>

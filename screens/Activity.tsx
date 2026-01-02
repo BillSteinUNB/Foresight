@@ -39,6 +39,8 @@ const FilterChip: React.FC<FilterChipProps> = ({ label, active, onPress }) => (
     onPress={onPress}
     style={[styles.filterChip, active && styles.filterChipActive]}
     activeOpacity={0.7}
+    accessibilityLabel={`Show ${label} transactions`}
+    accessibilityRole="button"
   >
     <Text style={[styles.filterChipText, active && styles.filterChipTextActive]}>
       {label}
@@ -218,14 +220,14 @@ const Activity: React.FC = () => {
         <View style={styles.header}>
           {selectionMode ? (
             <>
-              <TouchableOpacity onPress={exitSelectionMode} style={styles.cancelBtn}>
+              <TouchableOpacity onPress={exitSelectionMode} style={styles.cancelBtn} accessibilityLabel="Cancel selection" accessibilityRole="button">
                 <Text style={styles.cancelBtnText}>Cancel</Text>
               </TouchableOpacity>
               <Text style={styles.selectionCount}>
                 {selectedIds.size} selected
               </Text>
               <View style={commonStyles.row}>
-                <TouchableOpacity onPress={selectAll} style={styles.selectAllBtn}>
+                <TouchableOpacity onPress={selectAll} style={styles.selectAllBtn} accessibilityLabel="Select all transactions" accessibilityRole="button">
                   <Text style={styles.selectAllText}>Select All</Text>
                 </TouchableOpacity>
               </View>
@@ -237,12 +239,16 @@ const Activity: React.FC = () => {
                 <TouchableOpacity
                   onPress={() => setIsSearchOpen(!isSearchOpen)}
                   style={[styles.iconButton, isSearchOpen && styles.iconButtonActive]}
+                  accessibilityLabel={isSearchOpen ? "Close search" : "Open search"}
+                  accessibilityRole="button"
                 >
                   <Ionicons name="search" size={18} color={isSearchOpen ? colors.black : colors.neutral400} />
                 </TouchableOpacity>
                 <TouchableOpacity
                   onPress={() => setShowFilters(!showFilters)}
                   style={[styles.iconButton, showFilters && styles.iconButtonActive]}
+                  accessibilityLabel={showFilters ? "Close filters" : "Open filters"}
+                  accessibilityRole="button"
                 >
                   <Ionicons name="options-outline" size={18} color={showFilters ? colors.black : colors.neutral400} />
                   {hasActiveFilters && !showFilters && <View style={styles.filterBadge} />}
@@ -261,7 +267,7 @@ const Activity: React.FC = () => {
               exit={{ opacity: 0, height: 0 }}
               style={styles.bulkActionBar}
             >
-              <TouchableOpacity onPress={handleBulkDelete} style={styles.bulkDeleteBtn}>
+              <TouchableOpacity onPress={handleBulkDelete} style={styles.bulkDeleteBtn} accessibilityLabel={`Delete ${selectedIds.size} transactions`} accessibilityRole="button">
                 <Ionicons name="trash-outline" size={18} color={colors.white} />
                 <Text style={styles.bulkDeleteText}>Delete ({selectedIds.size})</Text>
               </TouchableOpacity>
@@ -288,7 +294,7 @@ const Activity: React.FC = () => {
                 autoFocus
               />
               {searchQuery.length > 0 && (
-                <TouchableOpacity onPress={() => setSearchQuery('')} style={styles.clearButton}>
+                <TouchableOpacity onPress={() => setSearchQuery('')} style={styles.clearButton} accessibilityLabel="Clear search" accessibilityRole="button">
                   <Ionicons name="close-circle" size={18} color={colors.neutral400} />
                 </TouchableOpacity>
               )}
@@ -319,6 +325,8 @@ const Activity: React.FC = () => {
                   <TouchableOpacity
                     onPress={() => setDateRange('all')}
                     style={[styles.dateRangePill, dateRange === 'all' && styles.dateRangePillActive]}
+                    accessibilityLabel="Filter by All Time"
+                    accessibilityRole="button"
                   >
                     <Text style={[styles.dateRangePillText, dateRange === 'all' && styles.dateRangePillTextActive]}>
                       All Time
@@ -327,6 +335,8 @@ const Activity: React.FC = () => {
                   <TouchableOpacity
                     onPress={() => setDateRange('today')}
                     style={[styles.dateRangePill, dateRange === 'today' && styles.dateRangePillActive]}
+                    accessibilityLabel="Filter by Today"
+                    accessibilityRole="button"
                   >
                     <Text style={[styles.dateRangePillText, dateRange === 'today' && styles.dateRangePillTextActive]}>
                       Today
@@ -335,6 +345,8 @@ const Activity: React.FC = () => {
                   <TouchableOpacity
                     onPress={() => setDateRange('week')}
                     style={[styles.dateRangePill, dateRange === 'week' && styles.dateRangePillActive]}
+                    accessibilityLabel="Filter by This Week"
+                    accessibilityRole="button"
                   >
                     <Text style={[styles.dateRangePillText, dateRange === 'week' && styles.dateRangePillTextActive]}>
                       This Week
@@ -343,6 +355,8 @@ const Activity: React.FC = () => {
                   <TouchableOpacity
                     onPress={() => setDateRange('month')}
                     style={[styles.dateRangePill, dateRange === 'month' && styles.dateRangePillActive]}
+                    accessibilityLabel="Filter by This Month"
+                    accessibilityRole="button"
                   >
                     <Text style={[styles.dateRangePillText, dateRange === 'month' && styles.dateRangePillTextActive]}>
                       This Month
@@ -356,7 +370,7 @@ const Activity: React.FC = () => {
                 <View style={commonStyles.rowBetween}>
                   <Text style={styles.categoryLabel}>Categories</Text>
                   {selectedCategories.size > 0 && (
-                    <TouchableOpacity onPress={() => setSelectedCategories(new Set())}>
+                    <TouchableOpacity onPress={() => setSelectedCategories(new Set())} accessibilityLabel="Clear category filters" accessibilityRole="button">
                       <Text style={styles.clearText}>Clear</Text>
                     </TouchableOpacity>
                   )}
@@ -367,6 +381,8 @@ const Activity: React.FC = () => {
                       key={cat}
                       onPress={() => toggleCategory(cat)}
                       style={[styles.categoryPill, selectedCategories.has(cat) && styles.categoryPillActive]}
+                      accessibilityLabel={`Filter by ${CATEGORY_LABELS[cat]}`}
+                      accessibilityRole="button"
                     >
                       <Text style={[styles.categoryPillText, selectedCategories.has(cat) && styles.categoryPillTextActive]}>
                         {CATEGORY_LABELS[cat]}
@@ -410,7 +426,7 @@ const Activity: React.FC = () => {
               {hasActiveFilters ? 'Try adjusting your filters' : 'Add your first transaction'}
             </Text>
             {hasActiveFilters && (
-              <TouchableOpacity onPress={clearFilters} style={styles.clearFiltersBtn}>
+              <TouchableOpacity onPress={clearFilters} style={styles.clearFiltersBtn} accessibilityLabel="Clear all filters" accessibilityRole="button">
                 <Text style={styles.clearFiltersBtnText}>Clear Filters</Text>
               </TouchableOpacity>
             )}

@@ -87,7 +87,7 @@ const AddGoal: React.FC<Props> = ({ isOpen, onClose, onAdd }) => {
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.overlay}
       >
-        <TouchableOpacity style={styles.backdrop} onPress={onClose} activeOpacity={1} />
+        <TouchableOpacity style={styles.backdrop} onPress={onClose} activeOpacity={1} accessibilityLabel="Close modal" accessibilityRole="button" />
 
         <MotiView
           from={{ translateY: 300 }}
@@ -104,7 +104,7 @@ const AddGoal: React.FC<Props> = ({ isOpen, onClose, onAdd }) => {
               </View>
               <Text style={styles.title}>New Savings Goal</Text>
             </View>
-            <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
+            <TouchableOpacity onPress={onClose} style={styles.closeBtn} accessibilityLabel="Close" accessibilityRole="button">
               <Ionicons name="close" size={20} color={colors.neutral400} />
             </TouchableOpacity>
           </View>
@@ -177,6 +177,9 @@ const AddGoal: React.FC<Props> = ({ isOpen, onClose, onAdd }) => {
                     disabled={!isStep1Valid}
                     style={[styles.continueBtn, !isStep1Valid && styles.continueBtnDisabled]}
                     activeOpacity={0.8}
+                    accessibilityLabel="Continue to step 2"
+                    accessibilityRole="button"
+                    accessibilityState={{ disabled: !isStep1Valid }}
                   >
                     <Text style={styles.continueBtnText}>Continue</Text>
                   </TouchableOpacity>
@@ -201,6 +204,8 @@ const AddGoal: React.FC<Props> = ({ isOpen, onClose, onAdd }) => {
                             Haptics.selectionAsync();
                           }}
                           style={[styles.iconBtn, selectedIcon === icon && styles.iconBtnActive]}
+                          accessibilityLabel={`Select icon ${icon}`}
+                          accessibilityRole="button"
                         >
                           <Text style={styles.iconText}>{icon}</Text>
                         </TouchableOpacity>
@@ -224,6 +229,8 @@ const AddGoal: React.FC<Props> = ({ isOpen, onClose, onAdd }) => {
                             { backgroundColor: color },
                             selectedColor === color && styles.colorBtnActive,
                           ]}
+                          accessibilityLabel={`Select color ${color}`}
+                          accessibilityRole="button"
                         >
                           {selectedColor === color && (
                             <Ionicons name="checkmark" size={18} color={colors.black} />
@@ -254,6 +261,8 @@ const AddGoal: React.FC<Props> = ({ isOpen, onClose, onAdd }) => {
                       onPress={() => setStep(1)}
                       style={styles.backBtn}
                       activeOpacity={0.7}
+                      accessibilityLabel="Go back to step 1"
+                      accessibilityRole="button"
                     >
                       <Text style={styles.backBtnText}>Back</Text>
                     </TouchableOpacity>
@@ -261,6 +270,8 @@ const AddGoal: React.FC<Props> = ({ isOpen, onClose, onAdd }) => {
                       onPress={handleSubmit}
                       style={styles.createBtn}
                       activeOpacity={0.8}
+                      accessibilityLabel="Create goal"
+                      accessibilityRole="button"
                     >
                       <Ionicons name="checkmark" size={20} color={colors.black} />
                       <Text style={styles.createBtnText}>Create Goal</Text>

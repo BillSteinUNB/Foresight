@@ -157,7 +157,7 @@ const AddTransaction: React.FC<Props> = ({
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.overlay}
       >
-        <TouchableOpacity style={styles.backdrop} onPress={onClose} activeOpacity={1} />
+        <TouchableOpacity style={styles.backdrop} onPress={onClose} activeOpacity={1} accessibilityLabel="Close modal" accessibilityRole="button" />
 
         <MotiView
           from={{ translateY: 300 }}
@@ -169,7 +169,7 @@ const AddTransaction: React.FC<Props> = ({
           {/* Header */}
           <View style={styles.header}>
             <Text style={styles.title}>{title}</Text>
-            <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
+            <TouchableOpacity onPress={onClose} style={styles.closeBtn} accessibilityLabel="Close add transaction modal" accessibilityRole="button">
               <Ionicons name="close" size={20} color={colors.neutral400} />
             </TouchableOpacity>
           </View>
@@ -194,6 +194,8 @@ const AddTransaction: React.FC<Props> = ({
                   <TouchableOpacity
                     onPress={() => setIsListening(!isListening)}
                     style={[styles.micBtn, isListening && styles.micBtnActive]}
+                    accessibilityLabel={isListening ? "Stop voice input" : "Start voice input"}
+                    accessibilityRole="button"
                   >
                     <Ionicons name="mic" size={20} color={isListening ? colors.white : colors.neutral400} />
                   </TouchableOpacity>
@@ -204,6 +206,9 @@ const AddTransaction: React.FC<Props> = ({
                   disabled={!input.trim() || isProcessing}
                   style={[styles.analyzeBtn, (!input.trim() || isProcessing) && styles.analyzeBtnDisabled]}
                   activeOpacity={0.8}
+                  accessibilityLabel="Analyze transaction"
+                  accessibilityRole="button"
+                  accessibilityState={{ disabled: !input.trim() || isProcessing }}
                 >
                   {isProcessing ? (
                     <>
@@ -225,12 +230,16 @@ const AddTransaction: React.FC<Props> = ({
                     <TouchableOpacity
                       onPress={() => handleSuggestion('Starbucks coffee $6.50')}
                       style={styles.suggestionChip}
+                      accessibilityLabel="Starbucks coffee suggestion, $6.50"
+                      accessibilityRole="button"
                     >
                       <Text style={styles.suggestionText}>☕ Starbucks $6.50</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
                       onPress={() => handleSuggestion('Uber to work $25')}
                       style={styles.suggestionChip}
+                      accessibilityLabel="Uber to work suggestion, $25"
+                      accessibilityRole="button"
                     >
                       <Text style={styles.suggestionText}>🚕 Uber $25</Text>
                     </TouchableOpacity>
@@ -312,6 +321,8 @@ const AddTransaction: React.FC<Props> = ({
                     }}
                     style={styles.editBtn}
                     activeOpacity={0.7}
+                    accessibilityLabel={mode === 'edit' ? "Go back to edit" : "Edit transaction"}
+                    accessibilityRole="button"
                   >
                     <Text style={styles.editBtnText}>
                       {mode === 'edit' ? 'Back' : 'Edit'}
@@ -322,6 +333,9 @@ const AddTransaction: React.FC<Props> = ({
                     disabled={!parsedData?.merchantName?.trim() || !parsedData?.amount || parsedData.amount <= 0}
                     style={styles.confirmBtn}
                     activeOpacity={0.8}
+                    accessibilityLabel={buttonText}
+                    accessibilityRole="button"
+                    accessibilityState={{ disabled: !parsedData?.merchantName?.trim() || !parsedData?.amount || parsedData.amount <= 0 }}
                   >
                     <Ionicons name="checkmark" size={20} color={colors.black} />
                     <Text style={styles.confirmBtnText}>{buttonText}</Text>

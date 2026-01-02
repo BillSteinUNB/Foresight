@@ -120,6 +120,8 @@ const InsightCard: React.FC<InsightCardProps> = ({ insight, onDismiss, onAction 
           disabled={isDismissing}
           style={styles.dismissButton}
           activeOpacity={0.7}
+          accessibilityLabel="Dismiss insight"
+          accessibilityRole="button"
         >
           <Ionicons name="close" size={16} color={colors.white} />
           <Text style={styles.dismissButtonText}>Dismiss</Text>
@@ -129,6 +131,8 @@ const InsightCard: React.FC<InsightCardProps> = ({ insight, onDismiss, onAction 
           disabled={isActioning}
           style={styles.actionButton}
           activeOpacity={0.7}
+          accessibilityLabel="Take action"
+          accessibilityRole="button"
         >
           {isActioning ? (
             <ActivityIndicator size="small" color={colors.black} />
@@ -179,6 +183,8 @@ const Insights: React.FC = () => {
               style={styles.headerBtn}
               onPress={() => navigation.navigate('SpendingTrends')}
               activeOpacity={0.7}
+              accessibilityLabel="View spending trends"
+              accessibilityRole="button"
             >
               <Ionicons name="trending-up-outline" size={18} color={colors.mint} />
               <Text style={styles.headerBtnText}>Trends</Text>
@@ -187,6 +193,8 @@ const Insights: React.FC = () => {
               style={styles.headerBtn}
               onPress={() => navigation.navigate('Subscriptions')}
               activeOpacity={0.7}
+              accessibilityLabel="View subscriptions"
+              accessibilityRole="button"
             >
               <Ionicons name="refresh-outline" size={18} color={colors.mint} />
               <Text style={styles.headerBtnText}>Subs</Text>
@@ -195,6 +203,8 @@ const Insights: React.FC = () => {
               style={styles.headerBtn}
               onPress={() => setShowBudgetManager(true)}
               activeOpacity={0.7}
+              accessibilityLabel="Manage budgets"
+              accessibilityRole="button"
             >
               <Ionicons name="wallet-outline" size={18} color={colors.mint} />
               <Text style={styles.headerBtnText}>Budgets</Text>

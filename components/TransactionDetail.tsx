@@ -79,7 +79,7 @@ const TransactionDetail: React.FC<Props> = ({ transaction, isOpen, onClose }) =>
         onRequestClose={onClose}
       >
       <View style={styles.overlay}>
-        <TouchableOpacity style={styles.backdrop} onPress={onClose} activeOpacity={1} />
+        <TouchableOpacity style={styles.backdrop} onPress={onClose} activeOpacity={1} accessibilityLabel="Close modal" accessibilityRole="button" />
 
         <MotiView
           from={{ translateY: 300 }}
@@ -93,7 +93,7 @@ const TransactionDetail: React.FC<Props> = ({ transaction, isOpen, onClose }) =>
 
           {/* Close Button */}
           <View style={styles.closeRow}>
-            <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
+            <TouchableOpacity onPress={onClose} style={styles.closeBtn} accessibilityLabel="Close" accessibilityRole="button">
               <Ionicons name="close" size={20} color={colors.neutral400} />
             </TouchableOpacity>
           </View>
@@ -154,6 +154,8 @@ const TransactionDetail: React.FC<Props> = ({ transaction, isOpen, onClose }) =>
                   style={styles.receiptPreview}
                   onPress={() => setReceiptPreviewVisible(true)}
                   activeOpacity={0.8}
+                  accessibilityLabel="View receipt"
+                  accessibilityRole="button"
                 >
                   <Image source={{ uri: transaction.receiptUri }} style={styles.receiptImage} />
                   <View style={styles.receiptOverlay}>
@@ -172,15 +174,17 @@ const TransactionDetail: React.FC<Props> = ({ transaction, isOpen, onClose }) =>
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                   setIsEditing(true);
                 }}
+                accessibilityLabel="Edit transaction"
+                accessibilityRole="button"
               >
                 <Ionicons name="create-outline" size={20} color={colors.neutral400} />
                 <Text style={styles.actionBtnText}>Edit</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.actionBtn} onPress={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}>
+              <TouchableOpacity style={styles.actionBtn} onPress={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)} accessibilityLabel="Share transaction" accessibilityRole="button">
                 <Ionicons name="share-outline" size={20} color={colors.neutral400} />
                 <Text style={styles.actionBtnText}>Share</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={[styles.actionBtn, styles.deleteBtn]} onPress={handleDelete}>
+              <TouchableOpacity style={[styles.actionBtn, styles.deleteBtn]} onPress={handleDelete} accessibilityLabel="Delete transaction" accessibilityRole="button">
                 <Ionicons name="trash-outline" size={20} color={colors.danger} />
                 <Text style={[styles.actionBtnText, { color: colors.danger }]}>Delete</Text>
               </TouchableOpacity>
@@ -188,10 +192,10 @@ const TransactionDetail: React.FC<Props> = ({ transaction, isOpen, onClose }) =>
 
             {/* Bottom Actions */}
             <View style={styles.bottomActions}>
-              <TouchableOpacity style={styles.secondaryBtn}>
+              <TouchableOpacity style={styles.secondaryBtn} accessibilityLabel="Split transaction" accessibilityRole="button">
                 <Text style={styles.secondaryBtnText}>Split Transaction</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.primaryBtn}>
+              <TouchableOpacity style={styles.primaryBtn} accessibilityLabel="Mark as recurring" accessibilityRole="button">
                 <Ionicons name="repeat" size={16} color={colors.black} />
                 <Text style={styles.primaryBtnText}>Mark Recurring</Text>
               </TouchableOpacity>
@@ -221,6 +225,8 @@ const TransactionDetail: React.FC<Props> = ({ transaction, isOpen, onClose }) =>
             <TouchableOpacity 
               style={styles.receiptCloseBtn}
               onPress={() => setReceiptPreviewVisible(false)}
+              accessibilityLabel="Close full screen preview"
+              accessibilityRole="button"
             >
               <Ionicons name="close" size={24} color={colors.white} />
             </TouchableOpacity>

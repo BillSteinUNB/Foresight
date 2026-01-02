@@ -136,6 +136,8 @@ const SpendingTrends: React.FC = () => {
                 selectedPeriod === p.value && dateRangeType === 'preset' && styles.periodPillActive
               ]}
               onPress={() => handlePresetSelect(p.value)}
+              accessibilityLabel={`Show ${p.label} spending`}
+              accessibilityRole="button"
             >
               <Text style={[
                 styles.periodText,
@@ -151,6 +153,8 @@ const SpendingTrends: React.FC = () => {
               dateRangeType === 'custom' && styles.periodPillActive
             ]}
             onPress={() => setShowCustomDateModal(true)}
+            accessibilityLabel="Select custom date range"
+            accessibilityRole="button"
           >
             <Ionicons 
               name="calendar-outline" 
@@ -301,7 +305,7 @@ const SpendingTrends: React.FC = () => {
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Custom Date Range</Text>
-              <TouchableOpacity onPress={() => setShowCustomDateModal(false)}>
+              <TouchableOpacity onPress={() => setShowCustomDateModal(false)} accessibilityLabel="Close" accessibilityRole="button">
                 <Ionicons name="close" size={24} color={colors.neutral400} />
               </TouchableOpacity>
             </View>
@@ -332,12 +336,16 @@ const SpendingTrends: React.FC = () => {
               <TouchableOpacity
                 style={styles.cancelButton}
                 onPress={() => setShowCustomDateModal(false)}
+                accessibilityLabel="Cancel"
+                accessibilityRole="button"
               >
                 <Text style={styles.cancelButtonText}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.applyButton}
                 onPress={handleCustomDateApply}
+                accessibilityLabel="Apply date range"
+                accessibilityRole="button"
               >
                 <Text style={styles.applyButtonText}>Apply</Text>
               </TouchableOpacity>

@@ -93,7 +93,7 @@ const RecurringEditModal: React.FC<RecurringEditModalProps> = ({
                 </Text>
               </View>
             </View>
-            <TouchableOpacity style={styles.closeButton} onPress={onClose}>
+            <TouchableOpacity style={styles.closeButton} onPress={onClose} accessibilityLabel="Close" accessibilityRole="button">
               <Ionicons name="close" size={24} color={colors.neutral400} />
             </TouchableOpacity>
           </View>
@@ -179,6 +179,8 @@ const RecurringEditModal: React.FC<RecurringEditModalProps> = ({
                       localFrequency === freq.value && styles.frequencyOptionActive,
                     ]}
                     onPress={() => handleFrequencyChange(freq.value)}
+                    accessibilityLabel={`Set frequency to ${freq.label}`}
+                    accessibilityRole="button"
                   >
                     <Text style={[
                       styles.frequencyText,
@@ -248,11 +250,11 @@ const RecurringEditModal: React.FC<RecurringEditModalProps> = ({
 
           {/* Footer Actions */}
           <View style={styles.footer}>
-            <TouchableOpacity style={styles.deleteButton} onPress={handleDelete}>
+            <TouchableOpacity style={styles.deleteButton} onPress={handleDelete} accessibilityLabel="Remove recurring transaction" accessibilityRole="button">
               <Ionicons name="trash-outline" size={20} color={colors.danger} />
               <Text style={styles.deleteButtonText}>Remove</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.confirmButton} onPress={handleConfirm}>
+            <TouchableOpacity style={styles.confirmButton} onPress={handleConfirm} accessibilityLabel="Save changes" accessibilityRole="button">
               <Text style={styles.confirmButtonText}>Save Changes</Text>
               <Ionicons name="checkmark" size={20} color={colors.black} />
             </TouchableOpacity>

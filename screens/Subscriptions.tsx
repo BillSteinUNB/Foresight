@@ -150,7 +150,7 @@ const RecurringPatternCard: React.FC<RecurringPatternCardProps> = ({ pattern, in
       transition={{ type: 'timing', duration: 300, delay: index * 50 }}
       style={styles.recurringCard}
     >
-      <TouchableOpacity style={styles.recurringCardContent} onPress={onPress} activeOpacity={0.7}>
+      <TouchableOpacity style={styles.recurringCardContent} onPress={onPress} activeOpacity={0.7} accessibilityLabel={`Edit recurring pattern ${pattern.merchantName}`} accessibilityRole="button">
         <View style={styles.recurringIcon}>
           <Ionicons 
             name={pattern.isSubscription ? 'repeat' : 'refresh-outline'} 
@@ -236,6 +236,8 @@ const Subscriptions: React.FC = () => {
             onPress={() => navigation.goBack()}
             style={styles.backButton}
             activeOpacity={0.7}
+            accessibilityLabel="Go back"
+            accessibilityRole="button"
           >
             <Ionicons name="chevron-back" size={24} color={colors.white} />
           </TouchableOpacity>
