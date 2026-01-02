@@ -179,6 +179,7 @@ const SimpleTransactionModal: React.FC<Props> = ({
                 ]}
                 onPress={() => {
                   setTransactionType('expense');
+                  setCategory('other'); // Reset category when switching to expense
                   Haptics.selectionAsync();
                 }}
                 accessibilityLabel="Expense"
@@ -207,6 +208,7 @@ const SimpleTransactionModal: React.FC<Props> = ({
                 ]}
                 onPress={() => {
                   setTransactionType('income');
+                  setCategory('income'); // Auto-set category to income
                   Haptics.selectionAsync();
                 }}
                 accessibilityLabel="Income"
