@@ -130,7 +130,6 @@ const AppContent: React.FC = () => {
       merchantLogo: newTx.merchantLogo,
       status: newTx.status,
     });
-    setIsAddModalOpen(false);
   }, [addTransaction]);
 
   const handleOpenModal = useCallback(() => setIsAddModalOpen(true), []);
