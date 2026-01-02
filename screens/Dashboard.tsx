@@ -30,6 +30,8 @@ const Dashboard: React.FC = () => {
     addBill,
     updateBill,
     deleteBill,
+    safeToSpend,
+    safeToSpendBreakdown,
   } = useApp();
   const [isAddGoalOpen, setIsAddGoalOpen] = useState(false);
   const [isBillModalOpen, setIsBillModalOpen] = useState(false);
@@ -114,7 +116,7 @@ const Dashboard: React.FC = () => {
         >
           <View style={styles.heroGlow} />
           <Text style={styles.heroLabel}>SAFE TO SPEND</Text>
-          <Text style={styles.heroAmount}>{formatCurrency(user.safeToSpend)}</Text>
+          <Text style={styles.heroAmount}>{formatCurrency(safeToSpend)}</Text>
           <Text style={styles.heroSubtext}>
             until end of month{' '}
             <View style={styles.daysChip}>
@@ -125,19 +127,19 @@ const Dashboard: React.FC = () => {
           {/* Breakdown */}
           <View style={styles.breakdown}>
             <View style={styles.breakdownItem}>
-              <Text style={styles.breakdownLabel}>Balance</Text>
-              <Text style={styles.breakdownValue}>{formatCompactCurrency(user.balance)}</Text>
+              <Text style={styles.breakdownLabel}>Income</Text>
+              <Text style={styles.breakdownValue}>{formatCompactCurrency(safeToSpendBreakdown.monthlyIncome)}</Text>
             </View>
             <Text style={styles.breakdownDivider}>-</Text>
             <View style={styles.breakdownItem}>
               <Text style={styles.breakdownLabel}>Bills</Text>
-              <Text style={styles.breakdownValue}>{formatCompactCurrency(totalBills)}</Text>
+              <Text style={styles.breakdownValue}>{formatCompactCurrency(safeToSpendBreakdown.unpaidBills)}</Text>
             </View>
             <Text style={styles.breakdownDivider}>=</Text>
             <View style={styles.breakdownItem}>
               <Text style={styles.breakdownLabel}>Safe</Text>
               <Text style={[styles.breakdownValue, { color: colors.mint }]}>
-                {formatCompactCurrency(user.safeToSpend)}
+                {formatCompactCurrency(safeToSpend)}
               </Text>
             </View>
           </View>
