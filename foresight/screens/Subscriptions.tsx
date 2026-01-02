@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet } from 'react-native';
 import { MotiView } from 'moti';
 import { Ionicons } from '@expo/vector-icons';
@@ -11,6 +11,10 @@ import { formatCurrency } from '../utils';
 import { colors, spacing, borderRadius, typography, commonStyles } from '../theme';
 import { Subscription, SubscriptionOverlap, formatFrequency, getUpcomingCharges } from '../utils/subscriptions';
 import { InsightsStackParamList } from '../navigation/TabNavigator';
+import { RecurringFrequency } from '../types';
+import { getFrequencyLabel, getMonthlyAmount, getYearlyAmount, RecurringPattern } from '../utils/recurring';
+import { CATEGORY_LABELS } from '../utils/trends';
+import RecurringEditModal from '../components/RecurringEditModal';
 
 const CATEGORY_ICONS: Record<string, keyof typeof Ionicons.glyphMap> = {
   'Video Streaming': 'tv-outline',
@@ -129,6 +133,49 @@ const UpcomingCharge: React.FC<UpcomingChargeProps> = ({ subscription, daysUntil
   );
 };
 
+interface RecurringPatternCardProps {
+  pattern: RecurringPattern;
+  index: number;
+  onPress: () => void;
+}
+
+const RecurringPatternCard: React.FC<RecurringPatternCardProps> = ({ pattern, index, onPress }) => {
+  const monthlyAmount = getMonthlyAmount(pattern);
+  const confidenceColor = pattern.confidence > 0.7 ? colors.mint : pattern.confidence > 0.4 ? colors.warning : colors.danger;
+  
+  return (
+    <MotiView
+      from={{ opacity: 0, translateX: -20 }}
+      animate={{ opacity: 1, translateX: 0 }}
+      transition={{ type: 'timing', duration: 300, delay: index * 50 }}
+      style={styles.recurringCard}
+    >
+      <TouchableOpacity style={styles.recurringCardContent} onPress={onPress} activeOpacity={0.7}>
+        <View style={styles.recurringIcon}>
+          <Ionicons 
+            name={pattern.isSubscription ? 'repeat' : 'refresh-outline'} 
+            size={18} 
+            color={confidenceColor} 
+          />
+        </View>
+        <View style={styles.recurringInfo}>
+          <Text style={styles.recurringName} numberOfLines={1}>
+            {pattern.merchantName}
+          </Text>
+          <Text style={styles.recurringCategory}>
+            {CATEGORY_LABELS[pattern.category]}
+          </Text>
+        </View>
+        <View style={styles.recurringAmount}>
+          <Text style={styles.recurringAmountValue}>{formatCurrency(monthlyAmount)}</Text>
+          <Text style={styles.recurringFrequency}>{getFrequencyLabel(pattern.frequency)}</Text>
+        </View>
+        <Ionicons name="chevron-forward" size={16} color={colors.neutral500} />
+      </TouchableOpacity>
+    </MotiView>
+  );
+};
+
 const Subscriptions: React.FC = () => {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<NativeStackNavigationProp<InsightsStackParamList>>();
@@ -136,8 +183,13 @@ const Subscriptions: React.FC = () => {
     subscriptions, 
     subscriptionOverlaps, 
     totalMonthlySubscriptions, 
-    totalYearlySubscriptions 
+    totalYearlySubscriptions,
+    recurringPatterns,
   } = useApp();
+
+  // Recurring patterns state
+  const [selectedPattern, setSelectedPattern] = useState<RecurringPattern | null>(null);
+  const [showRecurringModal, setShowRecurringModal] = useState(false);
 
   const upcomingCharges = useMemo(() => {
     return getUpcomingCharges(subscriptions, 14); // Next 14 days
@@ -146,6 +198,30 @@ const Subscriptions: React.FC = () => {
   const hasSubscriptions = subscriptions.length > 0;
   const hasOverlaps = subscriptionOverlaps.length > 0;
   const hasUpcoming = upcomingCharges.length > 0;
+  const hasRecurringPatterns = recurringPatterns.length > 0;
+
+  // Handle pattern confirmation (user confirms the detected pattern)
+  const handleConfirmPattern = (pattern: RecurringPattern) => {
+    // In a real app, this would save the confirmed pattern to state/storage
+    console.log('Confirmed pattern:', pattern);
+  };
+
+  // Handle pattern deletion (user removes a detected pattern)
+  const handleDeletePattern = (patternId: string) => {
+    // In a real app, this would remove the pattern from state/storage
+    console.log('Deleted pattern:', patternId);
+  };
+
+  // Handle frequency update
+  const handleUpdateFrequency = (patternId: string, frequency: RecurringFrequency) => {
+    // In a real app, this would update the pattern's frequency
+    console.log('Updated frequency:', patternId, frequency);
+  };
+
+  const openPatternEditor = (pattern: RecurringPattern) => {
+    setSelectedPattern(pattern);
+    setShowRecurringModal(true);
+  };
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -227,6 +303,31 @@ const Subscriptions: React.FC = () => {
           </View>
         )}
 
+        {/* Detected Recurring Patterns */}
+        {hasRecurringPatterns && (
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Ionicons name="repeat-outline" size={18} color={colors.blue400} />
+              <Text style={styles.sectionTitle}>Detected Recurring</Text>
+            </View>
+            <View style={styles.recurringList}>
+              {recurringPatterns.slice(0, 5).map((pattern, index) => (
+                <RecurringPatternCard
+                  key={`${pattern.merchantName}-${index}`}
+                  pattern={pattern}
+                  index={index}
+                  onPress={() => openPatternEditor(pattern)}
+                />
+              ))}
+              {recurringPatterns.length > 5 && (
+                <Text style={styles.morePatterns}>
+                  +{recurringPatterns.length - 5} more patterns detected
+                </Text>
+              )}
+            </View>
+          </View>
+        )}
+
         {/* Subscription List */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
@@ -255,6 +356,19 @@ const Subscriptions: React.FC = () => {
           )}
         </View>
       </ScrollView>
+
+      {/* Recurring Pattern Edit Modal */}
+      <RecurringEditModal
+        visible={showRecurringModal}
+        onClose={() => {
+          setShowRecurringModal(false);
+          setSelectedPattern(null);
+        }}
+        pattern={selectedPattern}
+        onConfirm={handleConfirmPattern}
+        onDelete={handleDeletePattern}
+        onUpdateFrequency={handleUpdateFrequency}
+      />
     </View>
   );
 };
@@ -513,6 +627,64 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSizes.xs,
     color: colors.neutral500,
     marginLeft: spacing[0.5],
+  },
+  recurringList: {
+    backgroundColor: colors.surface200,
+    borderRadius: borderRadius['2xl'],
+    borderWidth: 1,
+    borderColor: colors.surface300,
+    overflow: 'hidden',
+  },
+  recurringCard: {
+    borderBottomWidth: 1,
+    borderBottomColor: colors.surface300,
+  },
+  recurringCardContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: spacing[4],
+  },
+  recurringIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: borderRadius.lg,
+    backgroundColor: colors.surface300,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: spacing[3],
+  },
+  recurringInfo: {
+    flex: 1,
+  },
+  recurringName: {
+    fontSize: typography.fontSizes.md,
+    fontWeight: typography.fontWeights.medium,
+    color: colors.white,
+    marginBottom: spacing[0.5],
+  },
+  recurringCategory: {
+    fontSize: typography.fontSizes.xs,
+    color: colors.neutral500,
+  },
+  recurringAmount: {
+    alignItems: 'flex-end',
+    marginRight: spacing[3],
+  },
+  recurringAmountValue: {
+    fontSize: typography.fontSizes.md,
+    fontWeight: typography.fontWeights.semibold,
+    color: colors.white,
+  },
+  recurringFrequency: {
+    fontSize: typography.fontSizes.xs,
+    color: colors.neutral500,
+  },
+  morePatterns: {
+    fontSize: typography.fontSizes.sm,
+    color: colors.neutral500,
+    textAlign: 'center',
+    padding: spacing[4],
+    fontStyle: 'italic',
   },
   emptyState: {
     alignItems: 'center',

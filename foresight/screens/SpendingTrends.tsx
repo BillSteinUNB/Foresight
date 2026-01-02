@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Dimensions } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Dimensions, Modal, TextInput } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { MotiView } from 'moti';
@@ -10,12 +10,23 @@ import {
   aggregateTransactions, 
   getPeriodSummary, 
   getTopCategories,
+  getPeriodStartDate,
   CATEGORY_COLORS,
   CATEGORY_LABELS
 } from '../utils/trends';
-import { TrendPeriod } from '../types';
+import { TrendPeriod, BudgetCategory } from '../types';
 import { formatCurrency, formatCompactCurrency } from '../utils';
 import SpendingTrendsChart from '../components/SpendingTrendsChart';
+import CategoryPieChart from '../components/CategoryPieChart';
+import MonthOverMonthChart from '../components/MonthOverMonthChart';
+
+type DateRangeType = 'preset' | 'custom';
+
+interface DateRange {
+  startDate: Date;
+  endDate: Date;
+  label: string;
+}
 
 const PERIODS: { label: string; value: TrendPeriod }[] = [
   { label: 'Week', value: 'week' },
@@ -27,20 +38,81 @@ const PERIODS: { label: string; value: TrendPeriod }[] = [
 const SpendingTrends: React.FC = () => {
   const insets = useSafeAreaInsets();
   const { transactions } = useApp();
+  
+  // Period selection
   const [selectedPeriod, setSelectedPeriod] = useState<TrendPeriod>('month');
+  
+  // Date range type
+  const [dateRangeType, setDateRangeType] = useState<DateRangeType>('preset');
+  
+  // Custom date range state
+  const [showCustomDateModal, setShowCustomDateModal] = useState(false);
+  const [customStartDate, setCustomStartDate] = useState('');
+  const [customEndDate, setCustomEndDate] = useState('');
 
-  // Aggregated Data
+  // Current period dates
+  const currentPeriodStart = useMemo(() => {
+    if (dateRangeType === 'custom') {
+      return new Date(customStartDate || new Date());
+    }
+    return getPeriodStartDate(selectedPeriod);
+  }, [selectedPeriod, dateRangeType, customStartDate]);
+
+  const currentPeriodEnd = useMemo(() => new Date(), []);
+
+  // Previous period dates (for comparison)
+  const previousPeriodStart = useMemo(() => {
+    const start = new Date(currentPeriodStart);
+    const end = new Date(currentPeriodEnd);
+    const duration = end.getTime() - start.getTime();
+    return new Date(start.getTime() - duration);
+  }, [currentPeriodStart, currentPeriodEnd]);
+
+  // Aggregated Data - Current Period
+  const currentPeriodTransactions = useMemo(() => {
+    return transactions.filter(t => {
+      const txDate = new Date(t.date);
+      return t.type === 'expense' && txDate >= currentPeriodStart && txDate <= currentPeriodEnd;
+    });
+  }, [transactions, currentPeriodStart, currentPeriodEnd]);
+
+  // Aggregated Data - Previous Period
+  const previousPeriodTransactions = useMemo(() => {
+    return transactions.filter(t => {
+      const txDate = new Date(t.date);
+      return t.type === 'expense' && txDate >= previousPeriodStart && txDate < currentPeriodStart;
+    });
+  }, [transactions, previousPeriodStart, currentPeriodStart]);
+
+  // Current period data
   const trendData = useMemo(() => 
-    aggregateTransactions(transactions, selectedPeriod), 
-  [transactions, selectedPeriod]);
+    aggregateTransactions(currentPeriodTransactions, selectedPeriod), 
+  [currentPeriodTransactions, selectedPeriod]);
 
   const summary = useMemo(() => 
-    getPeriodSummary(transactions, selectedPeriod), 
-  [transactions, selectedPeriod]);
+    getPeriodSummary(currentPeriodTransactions, selectedPeriod), 
+  [currentPeriodTransactions, selectedPeriod]);
 
   const topCategories = useMemo(() => 
-    getTopCategories(transactions, selectedPeriod), 
-  [transactions, selectedPeriod]);
+    getTopCategories(currentPeriodTransactions, selectedPeriod), 
+  [currentPeriodTransactions, selectedPeriod]);
+
+  // Previous period summary for comparison
+  const previousPeriodSummary = useMemo(() => 
+    getPeriodSummary(previousPeriodTransactions, selectedPeriod), 
+  [previousPeriodTransactions, selectedPeriod]);
+
+  const handleCustomDateApply = () => {
+    if (customStartDate && customEndDate) {
+      setDateRangeType('custom');
+      setShowCustomDateModal(false);
+    }
+  };
+
+  const handlePresetSelect = (period: TrendPeriod) => {
+    setSelectedPeriod(period);
+    setDateRangeType('preset');
+  };
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -61,25 +133,53 @@ const SpendingTrends: React.FC = () => {
               key={p.value}
               style={[
                 styles.periodPill,
-                selectedPeriod === p.value && styles.periodPillActive
+                selectedPeriod === p.value && dateRangeType === 'preset' && styles.periodPillActive
               ]}
-              onPress={() => setSelectedPeriod(p.value)}
+              onPress={() => handlePresetSelect(p.value)}
             >
               <Text style={[
                 styles.periodText,
-                selectedPeriod === p.value && styles.periodTextActive
+                selectedPeriod === p.value && dateRangeType === 'preset' && styles.periodTextActive
               ]}>
                 {p.label}
               </Text>
             </TouchableOpacity>
           ))}
+          <TouchableOpacity
+            style={[
+              styles.periodPill,
+              dateRangeType === 'custom' && styles.periodPillActive
+            ]}
+            onPress={() => setShowCustomDateModal(true)}
+          >
+            <Ionicons 
+              name="calendar-outline" 
+              size={14} 
+              color={dateRangeType === 'custom' ? colors.white : colors.neutral500} 
+            />
+          </TouchableOpacity>
         </View>
+
+        {/* Month-over-Month Comparison */}
+        <MotiView
+          from={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ type: 'timing', duration: 500 }}
+          style={styles.chartSection}
+        >
+          <MonthOverMonthChart
+            currentPeriodSpending={summary.totalSpent}
+            previousPeriodSpending={previousPeriodSummary.totalSpent}
+            periodLabel="This Period"
+            previousPeriodLabel="Previous Period"
+          />
+        </MotiView>
 
         {/* Chart Section */}
         <MotiView
           from={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
-          transition={{ type: 'timing', duration: 500 }}
+          transition={{ type: 'timing', duration: 500, delay: 100 }}
           style={styles.chartSection}
         >
           <SpendingTrendsChart 
@@ -109,7 +209,20 @@ const SpendingTrends: React.FC = () => {
           </View>
         </View>
 
-        {/* Top Categories */}
+        {/* Category Breakdown Pie Chart */}
+        <MotiView
+          from={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ type: 'timing', duration: 500, delay: 200 }}
+          style={styles.chartSection}
+        >
+          <CategoryPieChart 
+            data={topCategories}
+            title="Spending by Category"
+          />
+        </MotiView>
+
+        {/* Top Categories List */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Top Categories</Text>
           
@@ -176,6 +289,62 @@ const SpendingTrends: React.FC = () => {
         )}
 
       </ScrollView>
+
+      {/* Custom Date Range Modal */}
+      <Modal
+        visible={showCustomDateModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowCustomDateModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Custom Date Range</Text>
+              <TouchableOpacity onPress={() => setShowCustomDateModal(false)}>
+                <Ionicons name="close" size={24} color={colors.neutral400} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.modalBody}>
+              <Text style={styles.inputLabel}>Start Date</Text>
+              <TextInput
+                style={styles.textInput}
+                placeholder="YYYY-MM-DD"
+                placeholderTextColor={colors.neutral500}
+                value={customStartDate}
+                onChangeText={setCustomStartDate}
+                keyboardType="numeric"
+              />
+
+              <Text style={styles.inputLabel}>End Date</Text>
+              <TextInput
+                style={styles.textInput}
+                placeholder="YYYY-MM-DD"
+                placeholderTextColor={colors.neutral500}
+                value={customEndDate}
+                onChangeText={setCustomEndDate}
+                keyboardType="numeric"
+              />
+            </View>
+
+            <View style={styles.modalFooter}>
+              <TouchableOpacity
+                style={styles.cancelButton}
+                onPress={() => setShowCustomDateModal(false)}
+              >
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.applyButton}
+                onPress={handleCustomDateApply}
+              >
+                <Text style={styles.applyButtonText}>Apply</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -361,6 +530,85 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSizes['2xl'],
     fontWeight: typography.fontWeights.semibold,
     color: colors.white,
+  },
+  
+  // Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    backgroundColor: colors.surface200,
+    borderRadius: borderRadius['2xl'],
+    width: '85%',
+    borderWidth: 1,
+    borderColor: colors.surface300,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: spacing[5],
+    borderBottomWidth: 1,
+    borderBottomColor: colors.surface300,
+  },
+  modalTitle: {
+    fontSize: typography.fontSizes.lg,
+    fontWeight: typography.fontWeights.semibold,
+    color: colors.white,
+  },
+  modalBody: {
+    padding: spacing[5],
+  },
+  inputLabel: {
+    fontSize: typography.fontSizes.sm,
+    fontWeight: typography.fontWeights.medium,
+    color: colors.neutral400,
+    marginBottom: spacing[2],
+    marginTop: spacing[3],
+  },
+  textInput: {
+    backgroundColor: colors.surface100,
+    borderWidth: 1,
+    borderColor: colors.surface300,
+    borderRadius: borderRadius.lg,
+    paddingVertical: spacing[3],
+    paddingHorizontal: spacing[4],
+    color: colors.white,
+    fontSize: typography.fontSizes.md,
+  },
+  modalFooter: {
+    flexDirection: 'row',
+    gap: spacing[3],
+    padding: spacing[5],
+    borderTopWidth: 1,
+    borderTopColor: colors.surface300,
+  },
+  cancelButton: {
+    flex: 1,
+    paddingVertical: spacing[3],
+    alignItems: 'center',
+    borderRadius: borderRadius.lg,
+    backgroundColor: colors.surface300,
+  },
+  cancelButtonText: {
+    color: colors.neutral200,
+    fontSize: typography.fontSizes.md,
+    fontWeight: typography.fontWeights.medium,
+  },
+  applyButton: {
+    flex: 1,
+    paddingVertical: spacing[3],
+    alignItems: 'center',
+    borderRadius: borderRadius.lg,
+    backgroundColor: colors.mint,
+  },
+  applyButtonText: {
+    color: colors.black,
+    fontSize: typography.fontSizes.md,
+    fontWeight: typography.fontWeights.semibold,
   },
 });
 
