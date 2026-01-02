@@ -345,6 +345,13 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     }
   }, [isHydrated, financialHealthScore, user.financialHealthScore, updateUserStore]);
 
+  // Update user store with calculated safeToSpend when it changes
+  useEffect(() => {
+    if (isHydrated && user.safeToSpend !== safeToSpend) {
+      updateUserStore({ safeToSpend });
+    }
+  }, [isHydrated, safeToSpend, user.safeToSpend, updateUserStore]);
+
   // === Wrapper functions for user operations ===
   
   const updateUser = useCallback((updates: Partial<User>) => {
