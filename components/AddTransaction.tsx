@@ -16,7 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 
 import { Transaction, TransactionUpdate, BudgetCategory } from '../types';
-import { formatCurrency, validateTransactionInput } from '../utils';
+import { formatCurrency, validateTransactionInput, isValidAmount } from '../utils';
 import { colors, spacing, borderRadius, typography } from '../theme';
 import ReceiptPicker from './ReceiptPicker';
 
@@ -168,7 +168,13 @@ const AddTransaction: React.FC<Props> = ({
         >
           {/* Header */}
           <View style={styles.header}>
-            <Text style={styles.title}>{title}</Text>
+            <View style={styles.headerLeft}>
+              <Text style={styles.title}>{title}</Text>
+              <View style={styles.aiBadge}>
+                <Ionicons name="sparkles" size={12} color={colors.mint} />
+                <Text style={styles.aiBadgeText}>AI</Text>
+              </View>
+            </View>
             <TouchableOpacity onPress={onClose} style={styles.closeBtn} accessibilityLabel="Close add transaction modal" accessibilityRole="button">
               <Ionicons name="close" size={20} color={colors.neutral400} />
             </TouchableOpacity>
@@ -374,10 +380,30 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: spacing[6],
   },
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[2],
+  },
   title: {
     fontSize: typography.fontSizes.xl,
     fontWeight: typography.fontWeights.semibold,
     color: colors.white,
+  },
+  aiBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[1],
+    backgroundColor: colors.mintMuted,
+    paddingHorizontal: spacing[2],
+    paddingVertical: spacing[1],
+    borderRadius: borderRadius.sm,
+  },
+  aiBadgeText: {
+    fontSize: typography.fontSizes.xs,
+    fontWeight: typography.fontWeights.semibold,
+    color: colors.mint,
+    letterSpacing: typography.letterSpacing.wider,
   },
   closeBtn: {
     width: 36,

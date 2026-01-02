@@ -17,6 +17,7 @@ import * as Haptics from 'expo-haptics';
 import { Bill } from '../types';
 import { validateBillInput } from '../utils/validation';
 import { colors, spacing, borderRadius, typography } from '../theme';
+import DatePickerModal from './DatePickerModal';
 
 type Mode = 'create' | 'edit';
 
@@ -44,6 +45,7 @@ const BillFormModal: React.FC<Props> = ({
   const [amount, setAmount] = useState('');
   const [dueDate, setDueDate] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [showDatePicker, setShowDatePicker] = useState(false);
 
   // Initialize from initial bill in edit mode
   useEffect(() => {
@@ -185,18 +187,11 @@ const BillFormModal: React.FC<Props> = ({
               <Text style={styles.label}>Due Date</Text>
               <TouchableOpacity
                 style={styles.dateInput}
-                onPress={() => {
-                  // Simple date picker - in production, use @react-native-community/datetimepicker
-                  Alert.alert(
-                    'Select Date',
-                    `Due: ${formatDueDate(dueDate)}\n\nFor production, integrate a date picker.`,
-                    [{ text: 'OK', onPress: () => {} }],
-                  );
-                }}
+                onPress={() => setShowDatePicker(true)}
                 accessibilityLabel="Select due date"
                 accessibilityRole="button"
               >
-                <View style={commonStyles.row}>
+                <View style={localStyles.row}>
                   <Ionicons name="calendar-outline" size={20} color={colors.neutral400} />
                   <Text style={styles.dateText}>{formatDueDate(dueDate)}</Text>
                   <Ionicons name="chevron-forward" size={16} color={colors.neutral600} />
@@ -232,12 +227,22 @@ const BillFormModal: React.FC<Props> = ({
             </TouchableOpacity>
           </View>
         </MotiView>
+
+        {/* Date Picker Modal */}
+        <DatePickerModal
+          visible={showDatePicker}
+          onClose={() => setShowDatePicker(false)}
+          onSelect={(date) => setDueDate(date.toISOString())}
+          selectedDate={dueDate ? new Date(dueDate) : undefined}
+          minDate={new Date()} // Can't select past dates for bills
+          title="Select Due Date"
+        />
       </KeyboardAvoidingView>
     </Modal>
   );
 };
 
-const commonStyles = {
+const localStyles = {
   row: {
     flexDirection: 'row',
     alignItems: 'center',

@@ -9,6 +9,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { AppProvider, useApp } from './context/AppContext';
 import TabNavigator from './navigation/TabNavigator';
 import AddTransaction from './components/AddTransaction';
+import SimpleTransactionModal from './components/SimpleTransactionModal';
 import BiometricLock from './components/BiometricLock';
 import ErrorBoundary from './components/ErrorBoundary';
 import AuthScreen from './screens/AuthScreen';
@@ -37,6 +38,7 @@ const AppContent: React.FC = () => {
   const { addTransaction, updateTransaction, isHydrated, preferences } = useApp();
   const { session, isInitialized: authInitialized, initialize: initializeAuth } = useAuthStore();
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [isSimpleModalOpen, setIsSimpleModalOpen] = useState(false);
   const [isLocked, setIsLocked] = useState(true);
   const [biometricAvailable, setBiometricAvailable] = useState(false);
   const [hasSynced, setHasSynced] = useState(false);
@@ -133,6 +135,8 @@ const AppContent: React.FC = () => {
 
   const handleOpenModal = useCallback(() => setIsAddModalOpen(true), []);
   const handleCloseModal = useCallback(() => setIsAddModalOpen(false), []);
+  const handleOpenSimpleModal = useCallback(() => setIsSimpleModalOpen(true), []);
+  const handleCloseSimpleModal = useCallback(() => setIsSimpleModalOpen(false), []);
 
   // Show loading screen while hydrating from persistence
   if (!isHydrated || !authInitialized) {
@@ -171,12 +175,19 @@ const AppContent: React.FC = () => {
           },
         }}
       >
-        <TabNavigator onAddPress={handleOpenModal} />
+        <TabNavigator onAddPress={handleOpenSimpleModal} />
       </NavigationContainer>
 
       <AddTransaction
         isOpen={isAddModalOpen}
         onClose={handleCloseModal}
+        onAdd={handleAddTransaction}
+        onUpdate={updateTransaction}
+      />
+
+      <SimpleTransactionModal
+        visible={isSimpleModalOpen}
+        onClose={handleCloseSimpleModal}
         onAdd={handleAddTransaction}
         onUpdate={updateTransaction}
       />
