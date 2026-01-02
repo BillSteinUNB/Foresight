@@ -5,7 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 
 import { SavingsGoal } from '../types';
-import { isValidAmount } from '../utils';
+import { validateGoalInput } from '../utils/validation';
 import { colors, spacing, borderRadius, typography, commonStyles } from '../theme';
 
 const GOAL_ICONS = ['🏖️', '🚗', '🏠', '💍', '📱', '🎓', '💼', '🎮', '✈️', '👶', '🏋️', '🎸'];
@@ -39,27 +39,39 @@ const AddGoal: React.FC<Props> = ({ isOpen, onClose, onAdd }) => {
   }, [isOpen]);
 
   const handleNext = useCallback(() => {
-    if (name.trim() && parseFloat(targetAmount) > 0) {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      setStep(2);
+    const target = parseFloat(targetAmount);
+    const validation = validateGoalInput(name, target);
+    
+    if (!validation.isValid) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      // Could show error message here if needed
+      return;
     }
+    
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setStep(2);
   }, [name, targetAmount]);
 
   const handleSubmit = useCallback(() => {
     const target = parseFloat(targetAmount);
     const current = parseFloat(currentAmount) || 0;
 
-    if (name.trim() && isValidAmount(target)) {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      onAdd({
-        name: name.trim(),
-        targetAmount: target,
-        currentAmount: current,
-        icon: selectedIcon,
-        color: selectedColor,
-      });
-      onClose();
+    const validation = validateGoalInput(name, target, current);
+    
+    if (!validation.isValid) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      return;
     }
+
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    onAdd({
+      name: name.trim(),
+      targetAmount: target,
+      currentAmount: current,
+      icon: selectedIcon,
+      color: selectedColor,
+    });
+    onClose();
   }, [name, targetAmount, currentAmount, selectedIcon, selectedColor, onAdd, onClose]);
 
   const isStep1Valid = name.trim() && parseFloat(targetAmount) > 0;

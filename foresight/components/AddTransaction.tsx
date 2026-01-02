@@ -16,7 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 
 import { Transaction, TransactionUpdate, BudgetCategory } from '../types';
-import { formatCurrency, isValidAmount } from '../utils';
+import { formatCurrency, validateTransactionInput } from '../utils';
 import { colors, spacing, borderRadius, typography } from '../theme';
 import ReceiptPicker from './ReceiptPicker';
 
@@ -110,7 +110,17 @@ const AddTransaction: React.FC<Props> = ({
   }, [input, mode]);
 
   const handleConfirm = useCallback(() => {
-    if (parsedData && isValidAmount(parsedData.amount || 0)) {
+    if (parsedData) {
+      const validation = validateTransactionInput(
+        parsedData.merchantName || '',
+        parsedData.amount || 0
+      );
+      
+      if (!validation.isValid) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+        return;
+      }
+
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
       // Add notes and receipt to parsed data
@@ -309,7 +319,7 @@ const AddTransaction: React.FC<Props> = ({
                   </TouchableOpacity>
                   <TouchableOpacity
                     onPress={handleConfirm}
-                    disabled={!isValidAmount(parsedData.amount || 0)}
+                    disabled={!parsedData?.merchantName?.trim() || !parsedData?.amount || parsedData.amount <= 0}
                     style={styles.confirmBtn}
                     activeOpacity={0.8}
                   >

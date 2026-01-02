@@ -1,8 +1,9 @@
-import React, { createContext, useContext, useMemo, ReactNode, useCallback } from 'react';
+import React, { createContext, useContext, useMemo, ReactNode, useCallback, useEffect } from 'react';
 import { Transaction, SavingsGoal, Bill, Insight, User, UserPreferences, TransactionUpdate, CategoryBudget, BudgetCategory, SubscriptionOverlap } from '../types';
 import { getRecurringTransactionIds, detectRecurringPatterns, RecurringPattern } from '../utils/recurring';
 import { detectSubscriptions, detectOverlaps, Subscription } from '../utils/subscriptions';
 import { calculateSafeToSpend, getSafeToSpendBreakdown } from '../utils/safeToSpend';
+import { calculateFinancialHealthScore } from '../utils/healthScore';
 import {
   formatCurrency,
   formatCurrencySimple,
@@ -73,6 +74,7 @@ interface AppContextType {
   // User
   user: User;
   preferences: UserPreferences;
+  updateUser: (updates: Partial<User>) => void;
   updatePreferences: (updates: Partial<UserPreferences>) => void;
   updateNotificationPreference: (key: keyof UserPreferences['notifications'], value: boolean) => void;
 
@@ -152,6 +154,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
   // User store
   const user = useUserStore((state) => state.user);
   const preferences = useUserStore((state) => state.preferences);
+  const updateUserStore = useUserStore((state) => state.updateUser);
   const updatePreferences = useUserStore((state) => state.updatePreferences);
   const updateNotificationPreference = useUserStore((state) => state.updateNotificationPreference);
   const userHydrated = useUserStore((state) => state.isHydrated);
@@ -313,6 +316,41 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     markBillPaidStore(id);
   }, [markBillPaidStore]);
 
+  // === Financial Health Score Calculation ===
+  
+  // Calculate monthly expenses (excluding income transactions)
+  const monthlyExpenses = useMemo(() => {
+    return transactions
+      .filter(t => {
+        const txDate = new Date(t.date);
+        return t.type === 'expense' && txDate >= startOfMonth && txDate <= endOfMonth;
+      })
+      .reduce((sum, t) => sum + t.amount, 0);
+  }, [transactions, startOfMonth, endOfMonth]);
+
+  // Calculate financial health score
+  const financialHealthScore = useMemo(() => {
+    return calculateFinancialHealthScore({
+      monthlyIncome,
+      monthlyExpenses,
+      budgets: budgetsWithSpending,
+      bills,
+    });
+  }, [monthlyIncome, monthlyExpenses, budgetsWithSpending, bills]);
+
+  // Update user store with calculated score when it changes
+  useEffect(() => {
+    if (isHydrated && user.financialHealthScore !== financialHealthScore) {
+      updateUserStore({ financialHealthScore });
+    }
+  }, [isHydrated, financialHealthScore, user.financialHealthScore, updateUserStore]);
+
+  // === Wrapper functions for user operations ===
+  
+  const updateUser = useCallback((updates: Partial<User>) => {
+    updateUserStore(updates);
+  }, [updateUserStore]);
+
   // === Context Value ===
 
   const value = useMemo(() => ({
@@ -362,6 +400,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     // User
     user,
     preferences,
+    updateUser,
     updatePreferences,
     updateNotificationPreference,
     
@@ -412,6 +451,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     budgetsWithSpending,
     user,
     preferences,
+    updateUser,
     updatePreferences,
     updateNotificationPreference,
     safeToSpend,

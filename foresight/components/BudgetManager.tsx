@@ -17,6 +17,7 @@ import * as Haptics from 'expo-haptics';
 
 import { CategoryBudget, BudgetCategory } from '../types';
 import { useApp } from '../context/AppContext';
+import { validateBudgetInput } from '../utils/validation';
 import { colors, spacing, borderRadius, typography, commonStyles } from '../theme';
 import { getCategoryIcon } from '../utils';
 
@@ -91,8 +92,11 @@ const BudgetManager: React.FC<Props> = ({ isOpen, onClose }) => {
 
   const handleSave = () => {
     const limit = parseFloat(monthlyLimit);
-    if (!limit || limit <= 0) {
-      Alert.alert('Invalid Amount', 'Please enter a valid monthly limit.');
+    const validation = validateBudgetInput(selectedCategory, limit, alertThreshold);
+    
+    if (!validation.isValid) {
+      Alert.alert('Validation Error', validation.errors[0].message);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
       return;
     }
 

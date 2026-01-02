@@ -15,6 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 
 import { Bill } from '../types';
+import { validateBillInput } from '../utils/validation';
 import { colors, spacing, borderRadius, typography } from '../theme';
 
 type Mode = 'create' | 'edit';
@@ -66,22 +67,12 @@ const BillFormModal: React.FC<Props> = ({
   }, [visible, mode, initialBill]);
 
   const handleSave = useCallback(() => {
-    // Validation
-    if (!name.trim()) {
-      setError('Bill name is required');
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-      return;
-    }
-
+    // Use centralized validation
     const amountNum = parseFloat(amount);
-    if (isNaN(amountNum) || amountNum <= 0) {
-      setError('Amount must be greater than 0');
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-      return;
-    }
-
-    if (!dueDate || isNaN(new Date(dueDate).getTime())) {
-      setError('Invalid due date');
+    const validation = validateBillInput(name.trim(), amountNum, dueDate);
+    
+    if (!validation.isValid) {
+      setError(validation.errors[0].message);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
       return;
     }

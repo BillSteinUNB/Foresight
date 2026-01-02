@@ -117,3 +117,20 @@ export const isValidAmount = (amount: number): boolean => {
 export const clamp = (value: number, min: number, max: number): number => {
   return Math.min(Math.max(value, min), max);
 };
+
+// Re-export health score utilities
+export {
+  calculateFinancialHealthScore,
+  getHealthScoreInfo,
+  shouldRecalculateScore,
+  type HealthScoreInputs,
+} from './healthScore';
+
+// Re-export validation utilities
+export {
+  validateTransactionInput,
+  validateBillInput,
+  validateGoalInput,
+  ValidationError,
+  type ValidationResult,
+} from './validation';
