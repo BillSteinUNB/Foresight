@@ -326,9 +326,9 @@ const styles = StyleSheet.create({
     color: colors.white,
   },
   closeBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: colors.surface300,
     alignItems: 'center',
     justifyContent: 'center',
@@ -394,10 +394,12 @@ const styles = StyleSheet.create({
     fontFamily: 'monospace',
   },
   continueBtn: {
+    minHeight: 44,
     backgroundColor: colors.mint,
     borderRadius: borderRadius.xl,
     paddingVertical: spacing[4],
     alignItems: 'center',
+    justifyContent: 'center',
   },
   continueBtnDisabled: {
     opacity: 0.5,
@@ -488,6 +490,7 @@ const styles = StyleSheet.create({
   },
   backBtn: {
     flex: 1,
+    minHeight: 44,
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: spacing[4],
@@ -501,6 +504,7 @@ const styles = StyleSheet.create({
   },
   createBtn: {
     flex: 1,
+    minHeight: 44,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',

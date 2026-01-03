@@ -399,9 +399,9 @@ const styles = StyleSheet.create({
     color: colors.white,
   },
   closeBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: colors.surface300,
     alignItems: 'center',
     justifyContent: 'center',
@@ -558,10 +558,12 @@ const styles = StyleSheet.create({
   },
   cancelBtn: {
     flex: 1,
+    minHeight: 44,
     paddingVertical: spacing[4],
     backgroundColor: colors.surface300,
     borderRadius: borderRadius.xl,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   cancelBtnText: {
     fontSize: typography.fontSizes.md,
@@ -570,6 +572,7 @@ const styles = StyleSheet.create({
   },
   saveBtn: {
     flex: 2,
+    minHeight: 44,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import { MotiView } from 'moti';
@@ -25,27 +25,28 @@ interface HealthDialProps {
   score: number;
 }
 
-const HealthDial: React.FC<HealthDialProps> = ({ score }) => {
+const HealthDial: React.FC<HealthDialProps> = React.memo(({ score }) => {
   const normalizedScore = Math.min(Math.max(score, 0), 100);
   const radius = 80;
   const strokeWidth = 12;
   const circumference = radius * Math.PI;
 
-  const getColor = (s: number): string => {
-    if (s < SCORE_THRESHOLDS.LOW) return SCORE_COLORS.LOW;
-    if (s < SCORE_THRESHOLDS.MEDIUM) return SCORE_COLORS.MEDIUM;
+  const color = useMemo(() => {
+    if (normalizedScore < SCORE_THRESHOLDS.LOW) return SCORE_COLORS.LOW;
+    if (normalizedScore < SCORE_THRESHOLDS.MEDIUM) return SCORE_COLORS.MEDIUM;
     return SCORE_COLORS.HIGH;
-  };
+  }, [normalizedScore]);
 
-  const getLabel = (s: number): string => {
-    if (s > 75) return SCORE_LABELS.EXCELLENT;
-    if (s > 50) return SCORE_LABELS.GOOD;
+  const label = useMemo(() => {
+    if (normalizedScore > 75) return SCORE_LABELS.EXCELLENT;
+    if (normalizedScore > 50) return SCORE_LABELS.GOOD;
     return SCORE_LABELS.FAIR;
-  };
+  }, [normalizedScore]);
 
-  const color = getColor(normalizedScore);
-  const label = getLabel(normalizedScore);
-  const progress = (normalizedScore / 100) * circumference;
+  const progress = useMemo(() => 
+    (normalizedScore / 100) * circumference,
+    [normalizedScore, circumference]
+  );
 
   return (
     <View style={styles.container}>
@@ -81,7 +82,9 @@ const HealthDial: React.FC<HealthDialProps> = ({ score }) => {
       </MotiView>
     </View>
   );
-};
+});
+
+HealthDial.displayName = 'HealthDial';
 
 const styles = StyleSheet.create({
   container: {

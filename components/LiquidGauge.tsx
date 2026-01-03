@@ -9,9 +9,9 @@ interface LiquidGaugeProps {
   size?: number;
 }
 
-const LiquidGauge: React.FC<LiquidGaugeProps> = ({ percentage, color, size = 100 }) => {
+const LiquidGauge: React.FC<LiquidGaugeProps> = React.memo(({ percentage, color, size = 100 }) => {
   const clampedPercentage = useMemo(() => Math.min(Math.max(percentage, 0), 100), [percentage]);
-  const height = size * 1.3;
+  const height = useMemo(() => size * 1.3, [size]);
 
   return (
     <View style={[styles.container, { width: size, height }]}>
@@ -37,7 +37,9 @@ const LiquidGauge: React.FC<LiquidGaugeProps> = ({ percentage, color, size = 100
       </View>
     </View>
   );
-};
+});
+
+LiquidGauge.displayName = 'LiquidGauge';
 
 const styles = StyleSheet.create({
   container: {

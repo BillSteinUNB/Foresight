@@ -324,9 +324,9 @@ const styles = StyleSheet.create({
     color: colors.white,
   },
   closeBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: colors.surface300,
     alignItems: 'center',
     justifyContent: 'center',
@@ -339,9 +339,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing[2],
   },
   navBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: colors.surface300,
     alignItems: 'center',
     justifyContent: 'center',
@@ -426,10 +426,12 @@ const styles = StyleSheet.create({
   },
   cancelBtn: {
     flex: 1,
+    minHeight: 44,
     paddingVertical: spacing[3],
     backgroundColor: colors.surface300,
     borderRadius: borderRadius.xl,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   cancelBtnText: {
     fontSize: typography.fontSizes.md,
@@ -438,6 +440,7 @@ const styles = StyleSheet.create({
   },
   confirmBtn: {
     flex: 1,
+    minHeight: 44,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',

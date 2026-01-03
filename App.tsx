@@ -1,7 +1,8 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { StatusBar } from 'expo-status-bar';
-import { StyleSheet, View, Text, ActivityIndicator, AppState, AppStateStatus } from 'react-native';
+import { StyleSheet, View, Text, ActivityIndicator, AppState, AppStateStatus, useColorScheme } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
+import { Theme } from '@react-navigation/native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import * as SplashScreen from 'expo-splash-screen';
@@ -34,7 +35,42 @@ cleanupLegacyStorage().then((result) => {
   }
 });
 
+// Light theme colors for system theming
+const lightThemeColors = {
+  primary: colors.mint,
+  background: '#FFFFFF',
+  card: '#F5F5F5',
+  text: '#000000',
+  border: '#E5E5E5',
+  notification: colors.danger,
+};
+
+// Dark theme colors for system theming
+const darkThemeColors = {
+  primary: colors.mint,
+  background: colors.black,
+  card: colors.surface200,
+  text: colors.white,
+  border: colors.surface300,
+  notification: colors.danger,
+};
+
+// Function to create navigation theme based on color scheme
+const createNavigationTheme = (colorScheme: 'light' | 'dark'): Theme => ({
+  dark: colorScheme === 'dark',
+  colors: colorScheme === 'dark' ? darkThemeColors : lightThemeColors,
+  fonts: {
+    regular: { fontFamily: 'System', fontWeight: '400' as const },
+    medium: { fontFamily: 'System', fontWeight: '500' as const },
+    bold: { fontFamily: 'System', fontWeight: '700' as const },
+    heavy: { fontFamily: 'System', fontWeight: '900' as const },
+  },
+});
+
 const AppContent: React.FC = () => {
+  const colorScheme = useColorScheme() || 'dark';
+  const navigationTheme = useMemo(() => createNavigationTheme(colorScheme), [colorScheme]);
+
   const { addTransaction, updateTransaction, isHydrated, preferences } = useApp();
   const { session, isInitialized: authInitialized, initialize: initializeAuth } = useAuthStore();
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -42,6 +78,7 @@ const AppContent: React.FC = () => {
   const [isLocked, setIsLocked] = useState(true);
   const [biometricAvailable, setBiometricAvailable] = useState(false);
   const [hasSynced, setHasSynced] = useState(false);
+  const [showPrivacyOverlay, setShowPrivacyOverlay] = useState(false);
 
   // Initialize auth on mount
   useEffect(() => {
@@ -104,11 +141,23 @@ const AppContent: React.FC = () => {
     }
   }, [isHydrated, preferences.biometricEnabled]);
 
-  // Lock app when it goes to background (if biometric is enabled)
+  // Lock app and show privacy overlay when it goes to background/inactive (prevents screenshot leakage)
   useEffect(() => {
     const handleAppStateChange = (nextAppState: AppStateStatus) => {
-      if (nextAppState === 'background' && preferences.biometricEnabled && biometricAvailable) {
-        setIsLocked(true);
+      // Show privacy overlay when app goes to inactive (app switcher, etc.)
+      if (nextAppState === 'inactive') {
+        setShowPrivacyOverlay(true);
+      }
+      // Hide privacy overlay and lock app when app goes to background
+      if (nextAppState === 'background') {
+        setShowPrivacyOverlay(false);
+        if (preferences.biometricEnabled && biometricAvailable) {
+          setIsLocked(true);
+        }
+      }
+      // Hide privacy overlay when app becomes active again
+      if (nextAppState === 'active') {
+        setShowPrivacyOverlay(false);
       }
     };
 
@@ -154,26 +203,8 @@ const AppContent: React.FC = () => {
 
   return (
     <View style={styles.container}>
-      <StatusBar style="light" />
-      <NavigationContainer
-        theme={{
-          dark: true,
-          colors: {
-            primary: colors.mint,
-            background: colors.black,
-            card: colors.surface200,
-            text: colors.white,
-            border: colors.surface300,
-            notification: colors.danger,
-          },
-          fonts: {
-            regular: { fontFamily: 'System', fontWeight: '400' as const },
-            medium: { fontFamily: 'System', fontWeight: '500' as const },
-            bold: { fontFamily: 'System', fontWeight: '700' as const },
-            heavy: { fontFamily: 'System', fontWeight: '900' as const },
-          },
-        }}
-      >
+      <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
+      <NavigationContainer theme={navigationTheme}>
         <TabNavigator onAddPress={handleOpenSimpleModal} />
       </NavigationContainer>
 
@@ -198,15 +229,31 @@ const AppContent: React.FC = () => {
           onUnlock={handleUnlock}
         />
       )}
+
+      {/* Privacy Overlay - prevents sensitive data from appearing in app switcher screenshots */}
+      {showPrivacyOverlay && (
+        <View style={styles.privacyOverlay}>
+          <View style={styles.privacyContent}>
+            <Text style={styles.privacyText}>Foresight</Text>
+          </View>
+        </View>
+      )}
     </View>
   );
 };
 
 const App: React.FC = () => {
+  // Handler to reset navigation to home when error boundary is triggered
+  const handleGoHome = useCallback(() => {
+    // The actual navigation reset would be handled by the navigation state
+    // being reinitialized when the error boundary resets
+    console.log('Go Home triggered from ErrorBoundary');
+  }, []);
+
   return (
     <GestureHandlerRootView style={styles.container}>
       <SafeAreaProvider>
-        <ErrorBoundary name="Root">
+        <ErrorBoundary name="Root" onGoHome={handleGoHome}>
           <AppProvider>
             <AppContent />
           </AppProvider>
@@ -231,6 +278,27 @@ const styles = StyleSheet.create({
     marginTop: spacing[4],
     fontSize: typography.fontSizes.base,
     color: colors.neutral400,
+  },
+  privacyOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: colors.surface100,
+    zIndex: 10000,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  privacyContent: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  privacyText: {
+    fontSize: typography.fontSizes['4xl'],
+    fontWeight: typography.fontWeights.bold,
+    color: colors.mint,
+    letterSpacing: typography.letterSpacing.wide,
   },
 });
 

@@ -119,6 +119,8 @@ const CustomTabBar: React.FC<TabBarProps> = ({ state, descriptors, navigation, o
                 onPress={() => handlePress(route, isFocused)}
                 style={styles.fabContainer}
                 activeOpacity={0.8}
+                accessibilityLabel="Add new transaction"
+                accessibilityRole="button"
               >
                 <View style={styles.fab}>
                   <Ionicons name="add" size={32} color={colors.black} />
@@ -133,6 +135,9 @@ const CustomTabBar: React.FC<TabBarProps> = ({ state, descriptors, navigation, o
               onPress={() => handlePress(route, isFocused)}
               style={styles.tabItem}
               activeOpacity={0.7}
+              accessibilityLabel={`${route.name} tab`}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: isFocused }}
             >
               <Ionicons
                 name={isFocused ? icons[route.name] : `${icons[route.name]}-outline` as any}

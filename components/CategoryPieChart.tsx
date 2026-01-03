@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useCallback } from 'react';
 import { View, StyleSheet, Text, Dimensions } from 'react-native';
 import { PieChart } from 'react-native-gifted-charts';
 import { BudgetCategory } from '../types';
@@ -21,7 +21,33 @@ interface PieDataItem {
   percentage: number;
 }
 
-const CategoryPieChart: React.FC<CategoryPieChartProps> = ({ data, title = 'Spending by Category' }) => {
+// Center label component for pie chart - extracted to prevent re-renders
+const CenterLabel: React.FC<{ total: number }> = React.memo(({ total }) => {
+  return (
+    <View style={styles.centerLabel}>
+      <Text style={styles.centerLabelValue}>{formatCurrency(total)}</Text>
+      <Text style={styles.centerLabelText}>Total</Text>
+    </View>
+  );
+});
+
+CenterLabel.displayName = 'CenterLabel';
+
+// Empty state component - extracted to prevent re-renders
+const EmptyState: React.FC<{ title?: string }> = React.memo(({ title }) => {
+  return (
+    <View style={styles.container}>
+      {title && <Text style={styles.title}>{title}</Text>}
+      <View style={styles.emptyContainer}>
+        <Text style={styles.emptyText}>No category data available</Text>
+      </View>
+    </View>
+  );
+});
+
+EmptyState.displayName = 'EmptyState';
+
+const CategoryPieChart: React.FC<CategoryPieChartProps> = React.memo(({ data, title = 'Spending by Category' }) => {
   const pieData = useMemo((): PieDataItem[] => {
     return data.map((item) => ({
       value: item.total,
@@ -34,7 +60,7 @@ const CategoryPieChart: React.FC<CategoryPieChartProps> = ({ data, title = 'Spen
 
   const total = useMemo(() => data.reduce((sum, item) => sum + item.total, 0), [data]);
 
-  const noData = data.length === 0 || total === 0;
+  const noData = useMemo(() => data.length === 0 || total === 0, [data.length, total]);
 
   // Calculate legend items (show top 5, group rest as "Other")
   const legendItems = useMemo(() => {
@@ -56,15 +82,10 @@ const CategoryPieChart: React.FC<CategoryPieChartProps> = ({ data, title = 'Spen
     ];
   }, [pieData, total]);
 
+  const centerLabelComponent = useCallback(() => <CenterLabel total={total} />, [total]);
+
   if (noData) {
-    return (
-      <View style={styles.container}>
-        {title && <Text style={styles.title}>{title}</Text>}
-        <View style={styles.emptyContainer}>
-          <Text style={styles.emptyText}>No category data available</Text>
-        </View>
-      </View>
-    );
+    return <EmptyState title={title} />;
   }
 
   return (
@@ -81,12 +102,7 @@ const CategoryPieChart: React.FC<CategoryPieChartProps> = ({ data, title = 'Spen
           fontWeight="600"
           radius={90}
           innerRadius={55}
-          centerLabelComponent={() => (
-            <View style={styles.centerLabel}>
-              <Text style={styles.centerLabelValue}>{formatCurrency(total)}</Text>
-              <Text style={styles.centerLabelText}>Total</Text>
-            </View>
-          )}
+          centerLabelComponent={centerLabelComponent}
           showValuesAsLabels={false}
         />
       </View>
@@ -106,7 +122,9 @@ const CategoryPieChart: React.FC<CategoryPieChartProps> = ({ data, title = 'Spen
       </View>
     </View>
   );
-};
+});
+
+CategoryPieChart.displayName = 'CategoryPieChart';
 
 const styles = StyleSheet.create({
   container: {

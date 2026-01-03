@@ -406,9 +406,9 @@ const styles = StyleSheet.create({
     letterSpacing: typography.letterSpacing.wider,
   },
   closeBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: colors.surface300,
     alignItems: 'center',
     justifyContent: 'center',
@@ -570,6 +570,7 @@ const styles = StyleSheet.create({
   },
   editBtn: {
     flex: 1,
+    minHeight: 44,
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: spacing[3],
@@ -583,6 +584,7 @@ const styles = StyleSheet.create({
   },
   confirmBtn: {
     flex: 1,
+    minHeight: 44,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',

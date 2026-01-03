@@ -312,7 +312,10 @@ const styles = StyleSheet.create({
     color: colors.neutral500,
   },
   closeButton: {
-    padding: spacing[2],
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   scrollContent: {
     padding: spacing[5],
@@ -492,6 +495,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: spacing[2],
     flex: 1,
+    minHeight: 44,
     paddingVertical: spacing[4],
     borderRadius: borderRadius.xl,
     backgroundColor: colors.surface300,
@@ -509,6 +513,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: spacing[2],
     flex: 2,
+    minHeight: 44,
     paddingVertical: spacing[4],
     borderRadius: borderRadius.xl,
     backgroundColor: colors.mint,

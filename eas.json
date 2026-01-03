@@ -23,6 +23,7 @@
       }
     },
     "production": {
+      "runtimeVersion": "1.0.0",
       "ios": {
         "simulator": false
       },

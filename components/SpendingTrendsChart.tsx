@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useCallback } from 'react';
 import { View, StyleSheet, Text, Dimensions } from 'react-native';
 import { BarChart } from 'react-native-gifted-charts';
 import { TrendPoint, TrendPeriod } from '../types';
@@ -12,41 +12,50 @@ interface SpendingTrendsChartProps {
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 
-const SpendingTrendsChart: React.FC<SpendingTrendsChartProps> = ({ 
+// Top label component for chart bars - extracted to prevent re-renders
+const TopLabelComponent: React.FC<{ value: number }> = React.memo(({ value }) => {
+  if (value <= 0) return null;
+
+  return (
+    <Text style={styles.topLabel}>
+      {value >= 1000
+        ? `$${(value / 1000).toFixed(1)}k`
+        : `$${Math.round(value)}`}
+    </Text>
+  );
+});
+
+TopLabelComponent.displayName = 'TopLabelComponent';
+
+const SpendingTrendsChart: React.FC<SpendingTrendsChartProps> = React.memo(({ 
   data, 
   period,
   showCategories = false 
 }) => {
   const chartData = useMemo(() => {
-    return data.map((point, index) => ({
+    return data.map((point) => ({
       value: point.totalExpense,
       label: point.label,
       frontColor: point.totalExpense === 0 ? colors.surface300 : colors.mint,
-      topLabelComponent: () => (
-        point.totalExpense > 0 ? (
-          <Text style={styles.topLabel}>
-            {point.totalExpense >= 1000 
-              ? `$${(point.totalExpense / 1000).toFixed(1)}k` 
-              : `$${Math.round(point.totalExpense)}`}
-          </Text>
-        ) : null
-      ),
+      topLabelComponent: () => <TopLabelComponent value={point.totalExpense} />,
     }));
   }, [data]);
 
-  const maxVal = Math.max(...data.map(d => d.totalExpense), 1);
-  const noData = data.every(d => d.totalExpense === 0);
+  const maxVal = useMemo(() => Math.max(...data.map(d => d.totalExpense), 1), [data]);
+  const noData = useMemo(() => data.every(d => d.totalExpense === 0), [data]);
 
   // Calculate dynamic width based on data points to ensure bars aren't too thin or crowded
   const barWidth = period === 'year' ? 12 : 20;
   const spacing_ = period === 'year' ? 12 : 20;
 
+  const renderEmptyContainer = useCallback(() => (
+    <View style={styles.emptyContainer}>
+      <Text style={styles.emptyText}>No spending data for this period</Text>
+    </View>
+  ), []);
+
   if (noData) {
-    return (
-      <View style={styles.emptyContainer}>
-        <Text style={styles.emptyText}>No spending data for this period</Text>
-      </View>
-    );
+    return renderEmptyContainer();
   }
 
   return (
@@ -79,7 +88,9 @@ const SpendingTrendsChart: React.FC<SpendingTrendsChartProps> = ({
       />
     </View>
   );
-};
+});
+
+SpendingTrendsChart.displayName = 'SpendingTrendsChart';
 
 const styles = StyleSheet.create({
   container: {

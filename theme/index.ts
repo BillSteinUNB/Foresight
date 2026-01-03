@@ -166,7 +166,7 @@ export const commonStyles = StyleSheet.create({
   caption: {
     fontSize: typography.fontSizes.xs,
     fontWeight: typography.fontWeights.bold,
-    color: colors.neutral500,
+    color: colors.neutral300,
     textTransform: 'uppercase',
     letterSpacing: typography.letterSpacing.wider,
   },
