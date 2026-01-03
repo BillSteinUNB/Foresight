@@ -1,19 +1,15 @@
 import { BudgetCategory } from './types';
+import { formatCurrency as formatCurrencyNew } from './utils/currency';
 
 /**
- * Format a number as currency
+ * Format a number as currency (uses currency module for multi-currency support)
  */
 export const formatCurrency = (amount: number, currency: string = 'USD'): string => {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: currency,
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(amount);
+  return formatCurrencyNew(amount, currency);
 };
 
 /**
- * Format a number as compact currency (e.g., $1.2K)
+ * Format a number as compact currency (e.g., $1.2K) - USD only
  */
 export const formatCompactCurrency = (amount: number): string => {
   return new Intl.NumberFormat('en-US', {

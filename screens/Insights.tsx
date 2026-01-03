@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
 import { MotiView, AnimatePresence } from 'moti';
 import { Ionicons } from '@expo/vector-icons';
@@ -12,6 +12,9 @@ import { Insight } from '../types';
 import { colors, spacing, borderRadius, typography, commonStyles } from '../theme';
 import BudgetManager from '../components/BudgetManager';
 import { InsightsStackParamList } from '../navigation/TabNavigator';
+import { generatePredictiveInsights, GeneratedInsight, toStorableInsight } from '../utils/predictiveInsights';
+import { useDebouncedEffect } from '../utils/useDebouncedEffect';
+import { getHealthScoreBreakdown, getHealthScoreInfo, getImprovementSuggestions } from '../utils/healthScore';
 
 const LOADING_DELAY_MS = 1200;
 
@@ -151,16 +154,66 @@ const InsightCard: React.FC<InsightCardProps> = ({ insight, onDismiss, onAction 
 const Insights: React.FC = () => {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<NativeStackNavigationProp<InsightsStackParamList>>();
-  const { insights, dismissInsight, markInsightRead } = useApp();
+  const { 
+    insights, 
+    dismissInsight, 
+    markInsightRead,
+    predictiveInsightsInput,
+    healthScoreBreakdown,
+    healthScoreSuggestions,
+  } = useApp();
   const [isLoading, setIsLoading] = useState(true);
   const [showBudgetManager, setShowBudgetManager] = useState(false);
+  const [liveInsights, setLiveInsights] = useState<GeneratedInsight[]>([]);
 
+  // Initial loading animation
   useEffect(() => {
     const timer = setTimeout(() => setIsLoading(false), LOADING_DELAY_MS);
     return () => clearTimeout(timer);
   }, []);
 
-  const unreadCount = insights.filter(i => !i.isRead).length;
+  // Generate predictive insights on initial mount
+  useEffect(() => {
+    const generated = generatePredictiveInsights(predictiveInsightsInput);
+    setLiveInsights(generated);
+  }, []); // Only run on mount
+
+  // Regenerate insights when transactions or bills change (debounced)
+  useDebouncedEffect(() => {
+    const generated = generatePredictiveInsights(predictiveInsightsInput);
+    setLiveInsights(generated);
+  }, [
+    predictiveInsightsInput.transactions.length,
+    predictiveInsightsInput.bills.length,
+    predictiveInsightsInput.budgets.length,
+    predictiveInsightsInput.goals.length,
+    predictiveInsightsInput.monthlyIncome,
+  ], 1500);
+
+  // Convert live insights to displayable format with generated IDs
+  const displayInsights = useMemo((): Insight[] => {
+    return liveInsights.map((insight, index) => ({
+      id: `live_${index}_${insight.title.slice(0, 10)}`,
+      type: insight.type,
+      title: insight.title,
+      description: insight.description,
+      data: insight.data,
+      isRead: false,
+    }));
+  }, [liveInsights]);
+
+  // Combine stored insights with live predictive insights (live ones first)
+  const allInsights = useMemo(() => {
+    // Deduplicate by title to avoid showing same insight from both sources
+    const storedTitles = new Set(insights.map(i => i.title));
+    const uniqueLiveInsights = displayInsights.filter(i => !storedTitles.has(i.title));
+    return [...uniqueLiveInsights, ...insights];
+  }, [insights, displayInsights]);
+
+  const unreadCount = allInsights.filter(i => !i.isRead).length;
+
+  // Get health score info for the breakdown section
+  const scoreInfo = useMemo(() => getHealthScoreInfo(healthScoreBreakdown.total), [healthScoreBreakdown.total]);
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -219,7 +272,7 @@ const Insights: React.FC = () => {
               <ActivityIndicator size="large" color={colors.mint} />
               <Text style={styles.loadingText}>Analyzing your finances...</Text>
             </View>
-          ) : insights.length === 0 ? (
+          ) : allInsights.length === 0 ? (
             <MotiView
               from={{ opacity: 0, translateY: 20 }}
               animate={{ opacity: 1, translateY: 0 }}
@@ -232,14 +285,85 @@ const Insights: React.FC = () => {
               </Text>
             </MotiView>
           ) : (
-            insights.map(insight => (
-              <InsightCard
-                key={insight.id}
-                insight={insight}
-                onDismiss={dismissInsight}
-                onAction={markInsightRead}
-              />
-            ))
+            <>
+              {/* Health Score Breakdown Section */}
+              <MotiView
+                from={{ opacity: 0, translateY: 20 }}
+                animate={{ opacity: 1, translateY: 0 }}
+                transition={{ type: 'timing', duration: 400 }}
+                style={styles.healthScoreCard}
+              >
+                <View style={styles.healthScoreHeader}>
+                  <View style={[styles.healthScoreIconContainer, { backgroundColor: `${scoreInfo.color}20` }]}>
+                    <Ionicons name="fitness" size={24} color={scoreInfo.color} />
+                  </View>
+                  <View style={styles.healthScoreHeaderText}>
+                    <Text style={styles.healthScoreTitle}>Financial Health</Text>
+                    <Text style={[styles.healthScoreValue, { color: scoreInfo.color }]}>
+                      {healthScoreBreakdown.total} / 100
+                    </Text>
+                  </View>
+                  <View style={[styles.healthScoreBadge, { backgroundColor: `${scoreInfo.color}20` }]}>
+                    <Text style={[styles.healthScoreBadgeText, { color: scoreInfo.color }]}>{scoreInfo.label}</Text>
+                  </View>
+                </View>
+
+                {/* Factor Breakdown */}
+                <View style={styles.factorsContainer}>
+                  {[
+                    { key: 'savingsRate', label: 'Savings Rate', icon: 'wallet' as const },
+                    { key: 'budgetAdherence', label: 'Budget Adherence', icon: 'pie-chart' as const },
+                    { key: 'billPunctuality', label: 'Bill Punctuality', icon: 'calendar' as const },
+                    { key: 'debtToIncome', label: 'Debt to Income', icon: 'trending-down' as const },
+                    { key: 'emergencyFund', label: 'Emergency Fund', icon: 'shield-checkmark' as const },
+                  ].map((factor) => {
+                    const data = healthScoreBreakdown[factor.key as keyof typeof healthScoreBreakdown] as { score: number; maxScore: number; details: string };
+                    const percentage = (data.score / data.maxScore) * 100;
+                    return (
+                      <View key={factor.key} style={styles.factorRow}>
+                        <View style={styles.factorLabelRow}>
+                          <Ionicons name={factor.icon} size={14} color={colors.neutral400} />
+                          <Text style={styles.factorLabel}>{factor.label}</Text>
+                          <Text style={styles.factorScore}>{data.score}/{data.maxScore}</Text>
+                        </View>
+                        <View style={styles.factorBar}>
+                          <MotiView
+                            from={{ width: '0%' }}
+                            animate={{ width: `${percentage}%` as any }}
+                            transition={{ type: 'timing', duration: 800, delay: 200 }}
+                            style={[styles.factorFill, { backgroundColor: percentage >= 70 ? colors.mint : percentage >= 40 ? colors.warning : colors.danger }]}
+                          />
+                        </View>
+                        <Text style={styles.factorDetails}>{data.details}</Text>
+                      </View>
+                    );
+                  })}
+                </View>
+
+                {/* Improvement Suggestions */}
+                {healthScoreSuggestions.length > 0 && (
+                  <View style={styles.suggestionsContainer}>
+                    <Text style={styles.suggestionsTitle}>Quick Wins</Text>
+                    {healthScoreSuggestions.slice(0, 3).map((suggestion, index) => (
+                      <View key={index} style={styles.suggestionRow}>
+                        <Ionicons name="bulb" size={14} color={colors.mint} />
+                        <Text style={styles.suggestionText}>{suggestion}</Text>
+                      </View>
+                    ))}
+                  </View>
+                )}
+              </MotiView>
+
+              {/* AI Insights */}
+              {allInsights.map(insight => (
+                <InsightCard
+                  key={insight.id}
+                  insight={insight}
+                  onDismiss={dismissInsight}
+                  onAction={markInsightRead}
+                />
+              ))}
+            </>
           )}
         </AnimatePresence>
       </ScrollView>
@@ -480,6 +604,113 @@ const styles = StyleSheet.create({
     color: colors.neutral500,
     textAlign: 'center',
     maxWidth: 260,
+  },
+  // Health Score Card styles
+  healthScoreCard: {
+    backgroundColor: colors.surface200,
+    borderRadius: borderRadius['3xl'],
+    padding: spacing[6],
+    borderWidth: 1,
+    borderColor: colors.surface300,
+    marginBottom: spacing[6],
+    overflow: 'hidden',
+  },
+  healthScoreHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[4],
+    marginBottom: spacing[5],
+  },
+  healthScoreIconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: borderRadius.xl,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  healthScoreHeaderText: {
+    flex: 1,
+  },
+  healthScoreTitle: {
+    fontSize: typography.fontSizes.lg,
+    fontWeight: typography.fontWeights.semibold,
+    color: colors.white,
+    marginBottom: spacing[0.5],
+  },
+  healthScoreValue: {
+    fontSize: typography.fontSizes['2xl'],
+    fontWeight: typography.fontWeights.bold,
+  },
+  healthScoreBadge: {
+    paddingHorizontal: spacing[3],
+    paddingVertical: spacing[1.5],
+    borderRadius: borderRadius.full,
+  },
+  healthScoreBadgeText: {
+    fontSize: typography.fontSizes.xs,
+    fontWeight: typography.fontWeights.bold,
+    textTransform: 'uppercase',
+    letterSpacing: typography.letterSpacing.wide,
+  },
+  factorsContainer: {
+    gap: spacing[4],
+  },
+  factorRow: {
+    gap: spacing[1.5],
+  },
+  factorLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[2],
+  },
+  factorLabel: {
+    flex: 1,
+    fontSize: typography.fontSizes.sm,
+    color: colors.neutral300,
+  },
+  factorScore: {
+    fontSize: typography.fontSizes.sm,
+    fontWeight: typography.fontWeights.medium,
+    color: colors.neutral400,
+    fontFamily: 'monospace',
+  },
+  factorBar: {
+    height: 6,
+    backgroundColor: colors.surface400,
+    borderRadius: borderRadius.full,
+    overflow: 'hidden',
+  },
+  factorFill: {
+    height: '100%',
+    borderRadius: borderRadius.full,
+  },
+  factorDetails: {
+    fontSize: typography.fontSizes.xs,
+    color: colors.neutral500,
+  },
+  suggestionsContainer: {
+    marginTop: spacing[6],
+    paddingTop: spacing[5],
+    borderTopWidth: 1,
+    borderTopColor: colors.surface400,
+    gap: spacing[3],
+  },
+  suggestionsTitle: {
+    fontSize: typography.fontSizes.sm,
+    fontWeight: typography.fontWeights.semibold,
+    color: colors.white,
+    marginBottom: spacing[1],
+  },
+  suggestionRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing[2],
+  },
+  suggestionText: {
+    flex: 1,
+    fontSize: typography.fontSizes.sm,
+    color: colors.neutral400,
+    lineHeight: 18,
   },
 });
 

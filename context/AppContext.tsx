@@ -3,7 +3,8 @@ import { Transaction, SavingsGoal, Bill, Insight, User, UserPreferences, Transac
 import { getRecurringTransactionIds, detectRecurringPatterns, RecurringPattern } from '../utils/recurring';
 import { detectSubscriptions, detectOverlaps, Subscription } from '../utils/subscriptions';
 import { calculateSafeToSpend, getSafeToSpendBreakdown } from '../utils/safeToSpend';
-import { calculateFinancialHealthScore } from '../utils/healthScore';
+import { calculateFinancialHealthScore, getHealthScoreBreakdown, getImprovementSuggestions, HealthScoreBreakdown } from '../utils/healthScore';
+import { generatePredictiveInsights, GeneratedInsight, PredictiveInsightInput } from '../utils/predictiveInsights';
 import {
   formatCurrency,
   formatCurrencySimple,
@@ -34,6 +35,7 @@ interface AppContextType {
   deleteTransaction: (id: string) => void;
   deleteTransactions: (ids: string[]) => void;
   updateTransaction: (id: string, updates: TransactionUpdate) => void;
+  updateTransactionsCategory: (ids: string[], category: BudgetCategory) => void;
 
   // Recurring Transactions
   recurringTransactionIds: Set<string>;
@@ -88,6 +90,13 @@ interface AppContextType {
     safeToSpend: number;
   };
 
+  // Financial Health Score V2
+  healthScoreBreakdown: HealthScoreBreakdown;
+  healthScoreSuggestions: string[];
+
+  // Predictive Insights
+  predictiveInsightsInput: PredictiveInsightInput;
+
   // Currency helpers
   formatCurrency: (amount: number, currencyCode?: string) => string;
   formatCurrencySimple: (amount: number, currencyCode?: string) => string;
@@ -121,6 +130,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
   const deleteTransaction = useTransactionStore((state) => state.deleteTransaction);
   const deleteTransactions = useTransactionStore((state) => state.deleteTransactions);
   const updateTransaction = useTransactionStore((state) => state.updateTransaction);
+  const updateTransactionsCategory = useTransactionStore((state) => state.updateTransactionsCategory);
   const transactionsHydrated = useTransactionStore((state) => state.isHydrated);
 
   // Goal store
@@ -338,6 +348,33 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     });
   }, [monthlyIncome, monthlyExpenses, budgetsWithSpending, bills]);
 
+  // Calculate health score breakdown (V2 - with detailed factor scores)
+  const healthScoreBreakdown = useMemo(() => {
+    return getHealthScoreBreakdown({
+      monthlyIncome,
+      monthlyExpenses,
+      budgets: budgetsWithSpending,
+      bills,
+    });
+  }, [monthlyIncome, monthlyExpenses, budgetsWithSpending, bills]);
+
+  // Get improvement suggestions based on breakdown
+  const healthScoreSuggestions = useMemo(() => {
+    return getImprovementSuggestions(healthScoreBreakdown);
+  }, [healthScoreBreakdown]);
+
+  // Prepare predictive insights input for consumers
+  const currentBalance = useMemo(() => user.balance || 0, [user.balance]);
+  
+  const predictiveInsightsInput = useMemo((): PredictiveInsightInput => ({
+    transactions,
+    bills,
+    budgets: budgetsWithSpending,
+    goals,
+    monthlyIncome,
+    currentBalance,
+  }), [transactions, bills, budgetsWithSpending, goals, monthlyIncome, currentBalance]);
+
   // Update user store with calculated score when it changes
   useEffect(() => {
     if (isHydrated && user.financialHealthScore !== financialHealthScore) {
@@ -367,6 +404,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     deleteTransaction,
     deleteTransactions,
     updateTransaction,
+    updateTransactionsCategory,
     
     // Recurring
     recurringTransactionIds,
@@ -414,6 +452,13 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     // Safe-to-Spend
     safeToSpend,
     safeToSpendBreakdown,
+
+    // Financial Health Score V2
+    healthScoreBreakdown,
+    healthScoreSuggestions,
+
+    // Predictive Insights
+    predictiveInsightsInput,
     
     // Currency helpers
     formatCurrency: formatCurrencyFn,
@@ -432,6 +477,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     deleteTransaction,
     deleteTransactions,
     updateTransaction,
+    updateTransactionsCategory,
     recurringTransactionIds,
     recurringPatterns,
     subscriptions,
@@ -463,6 +509,9 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     updateNotificationPreference,
     safeToSpend,
     safeToSpendBreakdown,
+    healthScoreBreakdown,
+    healthScoreSuggestions,
+    predictiveInsightsInput,
     currentCurrency,
     isHydrated,
   ]);

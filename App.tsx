@@ -21,6 +21,8 @@ import { Transaction } from './types';
 import { colors, spacing, typography } from './theme';
 import { canUseBiometrics } from './utils/biometrics';
 import { cleanupLegacyStorage } from './utils/persistence';
+import { scheduleBillReminder, DEFAULT_BILL_REMINDER_PREFS } from './utils/notifications';
+import { useBillStore } from './stores/useBillStore';
 
 // Prevent splash from auto-hiding so we control when it disappears
 SplashScreen.preventAutoHideAsync();
@@ -73,6 +75,7 @@ const AppContent: React.FC = () => {
 
   const { addTransaction, updateTransaction, isHydrated, preferences } = useApp();
   const { session, isInitialized: authInitialized, initialize: initializeAuth } = useAuthStore();
+  const bills = useBillStore((state) => state.bills);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isSimpleModalOpen, setIsSimpleModalOpen] = useState(false);
   const [isLocked, setIsLocked] = useState(true);
@@ -113,6 +116,58 @@ const AppContent: React.FC = () => {
 
     syncFromCloud();
   }, [session, isHydrated, hasSynced]);
+
+  // Re-schedule bill reminders after store hydration
+  // This fixes the bug where reminders disappear after app restart
+  useEffect(() => {
+    const hydrateReminders = async () => {
+      if (!isHydrated) return;
+
+      // Get the user's reminder preferences or use defaults
+      const reminderPrefs = preferences.billReminder || DEFAULT_BILL_REMINDER_PREFS;
+      
+      if (!reminderPrefs.enabled) {
+        return;
+      }
+
+      // Get all unpaid bills that don't have scheduled reminders
+      const unpaidBills = bills.filter((bill) => !bill.isPaid);
+      
+      let reScheduledCount = 0;
+      
+      for (const bill of unpaidBills) {
+        // Only re-schedule if the bill doesn't already have notification IDs
+        // or if the existing notifications are in the past
+        const needsReschedule = !bill.reminderNotificationIds?.length;
+        
+        if (needsReschedule) {
+          try {
+            const notificationIds = await scheduleBillReminder(bill, reminderPrefs);
+            if (notificationIds.length > 0) {
+              // Update the bill store with the new notification IDs
+              // Note: We need to use the store directly since we're outside the component
+              useBillStore.setState((state) => ({
+                bills: state.bills.map((b) =>
+                  b.id === bill.id
+                    ? { ...b, reminderNotificationIds: notificationIds }
+                    : b
+                ),
+              }));
+              reScheduledCount++;
+            }
+          } catch (error) {
+            console.warn(`Failed to re-schedule reminder for bill ${bill.id}:`, error);
+          }
+        }
+      }
+
+      if (reScheduledCount > 0) {
+        console.log(`Re-scheduled ${reScheduledCount} bill reminders after hydration`);
+      }
+    };
+
+    hydrateReminders();
+  }, [isHydrated, bills, preferences.billReminder]);
 
   // Reset sync flag when user logs out
   useEffect(() => {

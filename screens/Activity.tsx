@@ -1,19 +1,23 @@
-import React, { useState, useMemo, useCallback } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, TextInput, StyleSheet, Alert } from 'react-native';
+import React, { useMemo, useCallback, useState } from 'react';
+import { View, Text, ScrollView, TouchableOpacity, TextInput, StyleSheet, LayoutAnimation, Platform, UIManager } from 'react-native';
 import { MotiView, AnimatePresence } from 'moti';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import * as Haptics from 'expo-haptics';
 
 import { useApp } from '../context/AppContext';
 import TransactionItem from '../components/TransactionItem';
 import TransactionDetail from '../components/TransactionDetail';
-import { formatDate, formatCurrency } from '../utils';
+import { formatDate } from '../utils';
+import { formatCurrency as formatCurrencyNew } from '../utils/currency';
 import { Transaction, BudgetCategory } from '../types';
 import { colors, spacing, borderRadius, typography, commonStyles } from '../theme';
+import { useFiltering, filterTransactions } from '../hooks/useFiltering';
+import { useBulkSelection } from '../hooks/useBulkSelection';
 
-type FilterType = 'all' | 'income' | 'expense';
-type DateRangeType = 'all' | 'today' | 'week' | 'month' | 'custom';
+// Enable LayoutAnimation for Android
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 
 const CATEGORY_LABELS: Record<BudgetCategory, string> = {
   food_dining: '🍔 Food',
@@ -51,73 +55,26 @@ const FilterChip: React.FC<FilterChipProps> = ({ label, active, onPress }) => (
 const Activity: React.FC = () => {
   const insets = useSafeAreaInsets();
   const { transactions, deleteTransactions, recurringTransactionIds } = useApp();
-  const [filter, setFilter] = useState<FilterType>('all');
-  const [dateRange, setDateRange] = useState<DateRangeType>('all');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCategories, setSelectedCategories] = useState<Set<BudgetCategory>>(new Set());
-  const [isSearchOpen, setIsSearchOpen] = useState(false);
-  const [showFilters, setShowFilters] = useState(false);
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
-  
-  // Selection mode state
-  const [selectionMode, setSelectionMode] = useState(false);
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
-  // Calculate date range boundaries
-  const dateRangeBounds = useMemo(() => {
-    const now = new Date();
-    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    
-    switch (dateRange) {
-      case 'today':
-        return { start: startOfToday, end: now };
-      case 'week': {
-        const startOfWeek = new Date(startOfToday);
-        startOfWeek.setDate(startOfWeek.getDate() - startOfWeek.getDay()); // Sunday
-        return { start: startOfWeek, end: now };
-      }
-      case 'month': {
-        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-        return { start: startOfMonth, end: now };
-      }
-      default:
-        return null; // 'all' - no date filtering
-    }
-  }, [dateRange]);
+  // Use the filtering hook
+  const filtering = useFiltering(transactions);
 
-  // All available categories
-  const allCategories = useMemo(() => {
-    const cats = new Set<BudgetCategory>();
-    transactions.forEach(t => cats.add(t.category));
-    return Array.from(cats);
-  }, [transactions]);
+  // Use bulk selection hook
+  const bulkSelection = useBulkSelection<Transaction>({
+    onBulkDelete: (ids) => deleteTransactions(ids),
+  });
 
-  // Filter transactions
+  // Filter transactions using the helper function
   const filteredTransactions = useMemo(() => {
-    return transactions.filter(t => {
-      // Type filter
-      if (filter === 'income' && t.type !== 'income') return false;
-      if (filter === 'expense' && t.type !== 'expense') return false;
-      
-      // Date range filter
-      if (dateRangeBounds) {
-        const txDate = new Date(t.date);
-        if (txDate < dateRangeBounds.start || txDate > dateRangeBounds.end) return false;
-      }
-      
-      // Category filter
-      if (selectedCategories.size > 0 && !selectedCategories.has(t.category)) return false;
-      
-      // Search filter
-      if (searchQuery.trim()) {
-        const query = searchQuery.toLowerCase();
-        const matchesMerchant = t.merchantName.toLowerCase().includes(query);
-        const matchesCategory = t.category.toLowerCase().includes(query);
-        if (!matchesMerchant && !matchesCategory) return false;
-      }
-      return true;
-    });
-  }, [transactions, filter, dateRangeBounds, searchQuery, selectedCategories]);
+    return filterTransactions(
+      transactions,
+      filtering.filter,
+      filtering.dateRangeBounds,
+      filtering.searchQuery,
+      filtering.selectedCategories
+    );
+  }, [transactions, filtering.filter, filtering.dateRangeBounds, filtering.searchQuery, filtering.selectedCategories]);
 
   // Group by date
   const grouped = useMemo(() => {
@@ -136,78 +93,7 @@ const Activity: React.FC = () => {
     return { income, expenses, net: income - expenses };
   }, [filteredTransactions]);
 
-  const toggleCategory = useCallback((category: BudgetCategory) => {
-    setSelectedCategories(prev => {
-      const next = new Set(prev);
-      if (next.has(category)) next.delete(category);
-      else next.add(category);
-      return next;
-    });
-  }, []);
-
-  const clearFilters = useCallback(() => {
-    setFilter('all');
-    setDateRange('all');
-    setSearchQuery('');
-    setSelectedCategories(new Set());
-    setShowFilters(false);
-  }, []);
-
-  // Selection mode functions
-  const enterSelectionMode = useCallback((initialId?: string) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    setSelectionMode(true);
-    if (initialId) {
-      setSelectedIds(new Set([initialId]));
-    }
-  }, []);
-
-  const exitSelectionMode = useCallback(() => {
-    setSelectionMode(false);
-    setSelectedIds(new Set());
-  }, []);
-
-  const toggleSelection = useCallback((id: string) => {
-    Haptics.selectionAsync();
-    setSelectedIds(prev => {
-      const next = new Set(prev);
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
-      }
-      return next;
-    });
-  }, []);
-
-  const selectAll = useCallback(() => {
-    Haptics.selectionAsync();
-    const allIds = filteredTransactions.map(t => t.id);
-    setSelectedIds(new Set(allIds));
-  }, [filteredTransactions]);
-
-  const handleBulkDelete = useCallback(() => {
-    if (selectedIds.size === 0) return;
-
-    Alert.alert(
-      'Delete Transactions',
-      `Are you sure you want to delete ${selectedIds.size} transaction${selectedIds.size > 1 ? 's' : ''}?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: () => {
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-            deleteTransactions(Array.from(selectedIds));
-            exitSelectionMode();
-          },
-        },
-      ]
-    );
-  }, [selectedIds, deleteTransactions, exitSelectionMode]);
-
-  const hasActiveFilters = filter !== 'all' || dateRange !== 'all' || searchQuery.trim() || selectedCategories.size > 0;
+  const formatCurrency = (amount: number) => formatCurrencyNew(amount, 'USD'); // Default to USD for now
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -218,16 +104,16 @@ const Activity: React.FC = () => {
       >
         {/* Header */}
         <View style={styles.header}>
-          {selectionMode ? (
+          {bulkSelection.selectionMode ? (
             <>
-              <TouchableOpacity onPress={exitSelectionMode} style={styles.cancelBtn} accessibilityLabel="Cancel selection" accessibilityRole="button">
+              <TouchableOpacity onPress={bulkSelection.exitSelectionMode} style={styles.cancelBtn} accessibilityLabel="Cancel selection" accessibilityRole="button">
                 <Text style={styles.cancelBtnText}>Cancel</Text>
               </TouchableOpacity>
               <Text style={styles.selectionCount}>
-                {selectedIds.size} selected
+                {bulkSelection.selectedCount} selected
               </Text>
               <View style={commonStyles.row}>
-                <TouchableOpacity onPress={selectAll} style={styles.selectAllBtn} accessibilityLabel="Select all transactions" accessibilityRole="button">
+                <TouchableOpacity onPress={() => bulkSelection.toggleSelectAll(filteredTransactions)} style={styles.selectAllBtn} accessibilityLabel="Select all transactions" accessibilityRole="button">
                   <Text style={styles.selectAllText}>Select All</Text>
                 </TouchableOpacity>
               </View>
@@ -237,21 +123,21 @@ const Activity: React.FC = () => {
               <Text style={styles.title}>Activity</Text>
               <View style={commonStyles.row}>
                 <TouchableOpacity
-                  onPress={() => setIsSearchOpen(!isSearchOpen)}
-                  style={[styles.iconButton, isSearchOpen && styles.iconButtonActive]}
-                  accessibilityLabel={isSearchOpen ? "Close search" : "Open search"}
+                  onPress={() => filtering.setSearchQuery(filtering.searchQuery ? '' : '')}
+                  style={[styles.iconButton, filtering.searchQuery.length > 0 && styles.iconButtonActive]}
+                  accessibilityLabel="Search transactions"
                   accessibilityRole="button"
                 >
-                  <Ionicons name="search" size={18} color={isSearchOpen ? colors.black : colors.neutral400} />
+                  <Ionicons name="search" size={18} color={filtering.searchQuery.length > 0 ? colors.black : colors.neutral400} />
                 </TouchableOpacity>
                 <TouchableOpacity
-                  onPress={() => setShowFilters(!showFilters)}
-                  style={[styles.iconButton, showFilters && styles.iconButtonActive]}
-                  accessibilityLabel={showFilters ? "Close filters" : "Open filters"}
+                  onPress={filtering.toggleFilters}
+                  style={[styles.iconButton, filtering.showFilters && styles.iconButtonActive]}
+                  accessibilityLabel="Filter transactions"
                   accessibilityRole="button"
                 >
-                  <Ionicons name="options-outline" size={18} color={showFilters ? colors.black : colors.neutral400} />
-                  {hasActiveFilters && !showFilters && <View style={styles.filterBadge} />}
+                  <Ionicons name="options-outline" size={18} color={filtering.showFilters ? colors.black : colors.neutral400} />
+                  {filtering.hasActiveFilters && !filtering.showFilters && <View style={styles.filterBadge} />}
                 </TouchableOpacity>
               </View>
             </>
@@ -260,16 +146,16 @@ const Activity: React.FC = () => {
 
         {/* Bulk Action Bar */}
         <AnimatePresence>
-          {selectionMode && selectedIds.size > 0 && (
+          {bulkSelection.selectionMode && bulkSelection.selectedCount > 0 && (
             <MotiView
               from={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: 56 }}
               exit={{ opacity: 0, height: 0 }}
               style={styles.bulkActionBar}
             >
-              <TouchableOpacity onPress={handleBulkDelete} style={styles.bulkDeleteBtn} accessibilityLabel={`Delete ${selectedIds.size} transactions`} accessibilityRole="button">
+              <TouchableOpacity onPress={bulkSelection.handleBulkDelete} style={styles.bulkDeleteBtn} accessibilityLabel={`Delete ${bulkSelection.selectedCount} transactions`} accessibilityRole="button">
                 <Ionicons name="trash-outline" size={18} color={colors.white} />
-                <Text style={styles.bulkDeleteText}>Delete ({selectedIds.size})</Text>
+                <Text style={styles.bulkDeleteText}>Delete ({bulkSelection.selectedCount})</Text>
               </TouchableOpacity>
             </MotiView>
           )}
@@ -277,7 +163,7 @@ const Activity: React.FC = () => {
 
         {/* Search Bar */}
         <AnimatePresence>
-          {isSearchOpen && (
+          {filtering.searchQuery !== undefined && filtering.searchQuery !== null && (
             <MotiView
               from={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: 56 }}
@@ -286,15 +172,15 @@ const Activity: React.FC = () => {
             >
               <Ionicons name="search" size={18} color={colors.neutral500} style={styles.searchIcon} />
               <TextInput
-                value={searchQuery}
-                onChangeText={setSearchQuery}
+                value={filtering.searchQuery}
+                onChangeText={filtering.setSearchQuery}
                 placeholder="Search transactions..."
                 placeholderTextColor={colors.neutral600}
                 style={styles.searchInput}
                 autoFocus
               />
-              {searchQuery.length > 0 && (
-                <TouchableOpacity onPress={() => setSearchQuery('')} style={styles.clearButton} accessibilityLabel="Clear search" accessibilityRole="button">
+              {filtering.searchQuery.length > 0 && (
+                <TouchableOpacity onPress={() => filtering.setSearchQuery('')} style={styles.clearButton} accessibilityLabel="Clear search" accessibilityRole="button">
                   <Ionicons name="close-circle" size={18} color={colors.neutral400} />
                 </TouchableOpacity>
               )}
@@ -304,14 +190,14 @@ const Activity: React.FC = () => {
 
         {/* Type Filters */}
         <View style={styles.filterRow}>
-          <FilterChip label="All" active={filter === 'all'} onPress={() => setFilter('all')} />
-          <FilterChip label="Income" active={filter === 'income'} onPress={() => setFilter('income')} />
-          <FilterChip label="Expenses" active={filter === 'expense'} onPress={() => setFilter('expense')} />
+          <FilterChip label="All" active={filtering.filter === 'all'} onPress={() => filtering.setFilter('all')} />
+          <FilterChip label="Income" active={filtering.filter === 'income'} onPress={() => filtering.setFilter('income')} />
+          <FilterChip label="Expenses" active={filtering.filter === 'expense'} onPress={() => filtering.setFilter('expense')} />
         </View>
 
         {/* Category Filters */}
         <AnimatePresence>
-          {showFilters && (
+          {filtering.showFilters && (
             <MotiView
               from={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: 'auto' }}
@@ -323,42 +209,42 @@ const Activity: React.FC = () => {
                 <Text style={styles.categoryLabel}>Date Range</Text>
                 <View style={styles.dateRangePills}>
                   <TouchableOpacity
-                    onPress={() => setDateRange('all')}
-                    style={[styles.dateRangePill, dateRange === 'all' && styles.dateRangePillActive]}
+                    onPress={() => filtering.setDateRange('all')}
+                    style={[styles.dateRangePill, filtering.dateRange === 'all' && styles.dateRangePillActive]}
                     accessibilityLabel="Filter by All Time"
                     accessibilityRole="button"
                   >
-                    <Text style={[styles.dateRangePillText, dateRange === 'all' && styles.dateRangePillTextActive]}>
+                    <Text style={[styles.dateRangePillText, filtering.dateRange === 'all' && styles.dateRangePillTextActive]}>
                       All Time
                     </Text>
                   </TouchableOpacity>
                   <TouchableOpacity
-                    onPress={() => setDateRange('today')}
-                    style={[styles.dateRangePill, dateRange === 'today' && styles.dateRangePillActive]}
+                    onPress={() => filtering.setDateRange('today')}
+                    style={[styles.dateRangePill, filtering.dateRange === 'today' && styles.dateRangePillActive]}
                     accessibilityLabel="Filter by Today"
                     accessibilityRole="button"
                   >
-                    <Text style={[styles.dateRangePillText, dateRange === 'today' && styles.dateRangePillTextActive]}>
+                    <Text style={[styles.dateRangePillText, filtering.dateRange === 'today' && styles.dateRangePillTextActive]}>
                       Today
                     </Text>
                   </TouchableOpacity>
                   <TouchableOpacity
-                    onPress={() => setDateRange('week')}
-                    style={[styles.dateRangePill, dateRange === 'week' && styles.dateRangePillActive]}
+                    onPress={() => filtering.setDateRange('week')}
+                    style={[styles.dateRangePill, filtering.dateRange === 'week' && styles.dateRangePillActive]}
                     accessibilityLabel="Filter by This Week"
                     accessibilityRole="button"
                   >
-                    <Text style={[styles.dateRangePillText, dateRange === 'week' && styles.dateRangePillTextActive]}>
+                    <Text style={[styles.dateRangePillText, filtering.dateRange === 'week' && styles.dateRangePillTextActive]}>
                       This Week
                     </Text>
                   </TouchableOpacity>
                   <TouchableOpacity
-                    onPress={() => setDateRange('month')}
-                    style={[styles.dateRangePill, dateRange === 'month' && styles.dateRangePillActive]}
+                    onPress={() => filtering.setDateRange('month')}
+                    style={[styles.dateRangePill, filtering.dateRange === 'month' && styles.dateRangePillActive]}
                     accessibilityLabel="Filter by This Month"
                     accessibilityRole="button"
                   >
-                    <Text style={[styles.dateRangePillText, dateRange === 'month' && styles.dateRangePillTextActive]}>
+                    <Text style={[styles.dateRangePillText, filtering.dateRange === 'month' && styles.dateRangePillTextActive]}>
                       This Month
                     </Text>
                   </TouchableOpacity>
@@ -369,22 +255,22 @@ const Activity: React.FC = () => {
               <View style={styles.filterSection}>
                 <View style={commonStyles.rowBetween}>
                   <Text style={styles.categoryLabel}>Categories</Text>
-                  {selectedCategories.size > 0 && (
-                    <TouchableOpacity onPress={() => setSelectedCategories(new Set())} accessibilityLabel="Clear category filters" accessibilityRole="button">
+                  {filtering.selectedCategories.size > 0 && (
+                    <TouchableOpacity onPress={() => filtering.clearFilters()} accessibilityLabel="Clear category filters" accessibilityRole="button">
                       <Text style={styles.clearText}>Clear</Text>
                     </TouchableOpacity>
                   )}
                 </View>
                 <View style={styles.categoryPills}>
-                  {allCategories.map(cat => (
+                  {filtering.allCategories.map(cat => (
                     <TouchableOpacity
                       key={cat}
-                      onPress={() => toggleCategory(cat)}
-                      style={[styles.categoryPill, selectedCategories.has(cat) && styles.categoryPillActive]}
+                      onPress={() => filtering.toggleCategory(cat)}
+                      style={[styles.categoryPill, filtering.selectedCategories.has(cat) && styles.categoryPillActive]}
                       accessibilityLabel={`Filter by ${CATEGORY_LABELS[cat]}`}
                       accessibilityRole="button"
                     >
-                      <Text style={[styles.categoryPillText, selectedCategories.has(cat) && styles.categoryPillTextActive]}>
+                      <Text style={[styles.categoryPillText, filtering.selectedCategories.has(cat) && styles.categoryPillTextActive]}>
                         {CATEGORY_LABELS[cat]}
                       </Text>
                     </TouchableOpacity>
@@ -423,10 +309,10 @@ const Activity: React.FC = () => {
             <Text style={styles.emptyIcon}>🔍</Text>
             <Text style={styles.emptyTitle}>No transactions found</Text>
             <Text style={styles.emptyText}>
-              {hasActiveFilters ? 'Try adjusting your filters' : 'Add your first transaction'}
+              {filtering.hasActiveFilters ? 'Try adjusting your filters' : 'Add your first transaction'}
             </Text>
-            {hasActiveFilters && (
-              <TouchableOpacity onPress={clearFilters} style={styles.clearFiltersBtn} accessibilityLabel="Clear all filters" accessibilityRole="button">
+            {filtering.hasActiveFilters && (
+              <TouchableOpacity onPress={filtering.clearFilters} style={styles.clearFiltersBtn} accessibilityLabel="Clear all filters" accessibilityRole="button">
                 <Text style={styles.clearFiltersBtnText}>Clear Filters</Text>
               </TouchableOpacity>
             )}
@@ -450,15 +336,15 @@ const Activity: React.FC = () => {
                   </Text>
                 </View>
                 <View style={styles.transactionList}>
-{dateTransactions.map(t => (
+                  {dateTransactions.map(t => (
                     <TransactionItem
                       key={t.id}
                       transaction={t}
-                      onPress={() => selectionMode ? toggleSelection(t.id) : setSelectedTransaction(t)}
-                      onLongPress={() => enterSelectionMode(t.id)}
-                      selectionMode={selectionMode}
-                      selected={selectedIds.has(t.id)}
-                      onToggleSelected={() => toggleSelection(t.id)}
+                      onPress={() => bulkSelection.selectionMode ? bulkSelection.toggleSelection(t.id) : setSelectedTransaction(t)}
+                      onLongPress={() => bulkSelection.enterSelectionMode(t.id)}
+                      selectionMode={bulkSelection.selectionMode}
+                      selected={bulkSelection.isSelected(t.id)}
+                      onToggleSelected={() => bulkSelection.toggleSelection(t.id)}
                       isRecurring={recurringTransactionIds.has(t.id)}
                     />
                   ))}

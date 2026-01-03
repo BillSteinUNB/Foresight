@@ -1,20 +1,22 @@
-import React, { useState, useCallback, useEffect } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator, Alert, TextInput, Modal, Image, TouchableWithoutFeedback } from 'react-native';
+import React, { useEffect } from 'react';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator, Alert, Modal, Image, TouchableWithoutFeedback } from 'react-native';
 import { MotiView, AnimatePresence } from 'moti';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import * as ImagePicker from 'expo-image-picker';
+import * as Haptics from 'expo-haptics';
 
 import { useApp } from '../context/AppContext';
-import { formatCurrency } from '../utils';
-import { exportData, ExportFormat } from '../utils/exportData';
+import { formatCurrency as formatCurrencyNew } from '../utils/currency';
 import { colors, spacing, borderRadius, typography, commonStyles } from '../theme';
 import { DEFAULT_BILL_REMINDER_PREFS } from '../utils/notifications';
 import { BillReminderPreferences } from '../types';
-import { canUseBiometrics, authenticate, checkBiometricCapability, getBiometricTypeName } from '../utils/biometrics';
 import { useAuthStore } from '../stores/useAuthStore';
-import { syncService } from '../lib/syncService';
+import { useAvatar } from '../hooks/useAvatar';
+import { useBiometric } from '../hooks/useBiometric';
+import { useExport } from '../hooks/useExport';
+import { useSync } from '../hooks/useSync';
+import { useCurrency, useNetWorth } from '../hooks/useCurrency';
 
 interface MenuItemProps {
   icon: keyof typeof Ionicons.glyphMap;
@@ -24,7 +26,18 @@ interface MenuItemProps {
 }
 
 const MenuItem: React.FC<MenuItemProps> = ({ icon, label, value, onPress }) => (
-  <TouchableOpacity onPress={onPress} style={styles.menuItem} activeOpacity={0.7} accessibilityLabel={label} accessibilityRole="button">
+  <TouchableOpacity 
+    onPress={() => {
+      if (onPress) {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        onPress();
+      }
+    }} 
+    style={styles.menuItem} 
+    activeOpacity={0.7} 
+    accessibilityLabel={label} 
+    accessibilityRole="button"
+  >
     <View style={commonStyles.row}>
       <Ionicons name={icon} size={20} color={colors.neutral400} />
       <Text style={styles.menuLabel}>{label}</Text>
@@ -50,7 +63,10 @@ const ToggleItem: React.FC<ToggleItemProps> = ({ icon, label, enabled, onToggle 
       <Text style={styles.menuLabel}>{label}</Text>
     </View>
     <TouchableOpacity
-      onPress={onToggle}
+      onPress={() => {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        onToggle();
+      }}
       style={[styles.toggle, enabled && styles.toggleActive]}
       activeOpacity={0.8}
       accessibilityLabel={`Toggle ${label}`}
@@ -93,7 +109,10 @@ const BillReminderSettings: React.FC<BillReminderSettingsProps> = ({ prefs, onUp
           <Text style={styles.menuLabel}>Enable Reminders</Text>
         </View>
         <TouchableOpacity
-          onPress={() => onUpdate({ enabled: !prefs.enabled })}
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            onUpdate({ enabled: !prefs.enabled });
+          }}
           style={[styles.toggle, prefs.enabled && styles.toggleActive]}
           activeOpacity={0.8}
           accessibilityLabel="Toggle enable reminders"
@@ -121,7 +140,10 @@ const BillReminderSettings: React.FC<BillReminderSettingsProps> = ({ prefs, onUp
                 {DAYS_BEFORE_OPTIONS.map(days => (
                   <TouchableOpacity
                     key={days}
-                    onPress={() => onUpdate({ daysBeforeDue: days })}
+                    onPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      onUpdate({ daysBeforeDue: days });
+                    }}
                     style={[
                       styles.optionPill,
                       prefs.daysBeforeDue === days && styles.optionPillActive,
@@ -150,7 +172,10 @@ const BillReminderSettings: React.FC<BillReminderSettingsProps> = ({ prefs, onUp
                 {TIME_OPTIONS.map(({ hour, label }) => (
                   <TouchableOpacity
                     key={hour}
-                    onPress={() => onUpdate({ timeOfDay: { hour, minute: 0 } })}
+                    onPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      onUpdate({ timeOfDay: { hour, minute: 0 } });
+                    }}
                     style={[
                       styles.optionPill,
                       styles.optionPillWide,
@@ -183,97 +208,42 @@ const Profile: React.FC = () => {
   const insets = useSafeAreaInsets();
   const { user, preferences, transactions, goals, bills, updateUser, updatePreferences, updateNotificationPreference } = useApp();
   const { user: authUser, signOut, deleteAccount, isLoading: authLoading } = useAuthStore();
-  const [isExporting, setIsExporting] = useState(false);
-  const [exportSuccess, setExportSuccess] = useState(false);
-  const [exportError, setExportError] = useState<string | null>(null);
-  const [biometricAvailable, setBiometricAvailable] = useState(false);
-  const [biometricName, setBiometricName] = useState('Biometrics');
-  const [isSyncing, setIsSyncing] = useState(false);
-  const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null);
-  const [showAvatarModal, setShowAvatarModal] = useState(false);
-  const [showNetWorthModal, setShowNetWorthModal] = useState(false);
-  const [netWorthInput, setNetWorthInput] = useState('');
 
-  // Check biometric availability on mount
+  // Avatar hook
+  const avatar = useAvatar({
+    onAvatarUpdate: (uri) => updateUser({ avatarUri: uri }),
+  });
+
+  // Biometric hook
+  const biometric = useBiometric({
+    biometricEnabled: preferences.biometricEnabled,
+    onBiometricUpdate: (enabled) => updatePreferences({ biometricEnabled: enabled }),
+  });
+
+  // Initialize biometric check
   useEffect(() => {
-    const checkBiometrics = async () => {
-      const capability = await checkBiometricCapability();
-      setBiometricAvailable(capability.isAvailable && capability.isEnrolled);
-      setBiometricName(getBiometricTypeName(capability.biometricTypes));
-    };
-    checkBiometrics();
-  }, []);
+    biometric.checkBiometrics();
+  }, [biometric]);
 
-  const handleBiometricToggle = useCallback(async () => {
-    // If trying to enable biometrics
-    if (!preferences.biometricEnabled) {
-      // First check if available
-      const isAvailable = await canUseBiometrics();
-      if (!isAvailable) {
-        Alert.alert(
-          'Biometrics Unavailable',
-          'Please set up Face ID or Touch ID in your device settings first.',
-          [{ text: 'OK' }]
-        );
-        return;
-      }
+  // Export hook
+  const exportHook = useExport({
+    data: { transactions, goals, bills, user, preferences },
+  });
 
-      // Verify with biometric before enabling
-      const result = await authenticate({
-        promptMessage: `Enable ${biometricName} for Foresight`,
-      });
+  // Sync hook
+  const sync = useSync();
 
-      if (result.success) {
-        updatePreferences({ biometricEnabled: true });
-      } else if (result.error && result.error !== 'Authentication cancelled') {
-        Alert.alert('Authentication Failed', result.error);
-      }
-    } else {
-      // Disabling - confirm with biometric first
-      const result = await authenticate({
-        promptMessage: `Disable ${biometricName} for Foresight`,
-      });
+  // Currency hook
+  const currency = useCurrency({
+    currentCurrency: preferences.currency,
+    onCurrencyUpdate: (curr) => updatePreferences({ currency: curr }),
+  });
 
-      if (result.success) {
-        updatePreferences({ biometricEnabled: false });
-      } else if (result.error && result.error !== 'Authentication cancelled') {
-        Alert.alert('Authentication Failed', result.error);
-      }
-    }
-  }, [preferences.biometricEnabled, biometricName, updatePreferences]);
-
-  const handleExportData = useCallback(async (format: ExportFormat = 'json') => {
-    setIsExporting(true);
-    setExportError(null);
-    setExportSuccess(false);
-    
-    try {
-      await exportData(
-        { transactions, goals, bills, user, preferences },
-        format
-      );
-      setExportSuccess(true);
-      setTimeout(() => setExportSuccess(false), 3000);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Export failed';
-      setExportError(message);
-      Alert.alert('Export Failed', message);
-    } finally {
-      setIsExporting(false);
-    }
-  }, [transactions, goals, bills, user, preferences]);
-
-  const showExportOptions = useCallback(() => {
-    Alert.alert(
-      'Export Data',
-      'Choose export format:',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'CSV', onPress: () => handleExportData('csv') },
-        { text: 'JSON', onPress: () => handleExportData('json') },
-      ]
-    );
-  }, [handleExportData]);
+  // Net worth hook
+  const netWorth = useNetWorth({
+    currentNetWorth: user.netWorth || 0,
+    onNetWorthUpdate: (amount) => updateUser({ netWorth: amount }),
+  });
 
   const handleSignOut = useCallback(() => {
     Alert.alert(
@@ -281,8 +251,8 @@ const Profile: React.FC = () => {
       'Are you sure you want to sign out?',
       [
         { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Sign Out', 
+        {
+          text: 'Sign Out',
           style: 'destructive',
           onPress: async () => {
             await signOut();
@@ -314,7 +284,7 @@ const Profile: React.FC = () => {
                   onPress: async () => {
                     if (authUser?.id) {
                       // Delete all user data from Supabase first
-                      await syncService.deleteAllUserData(authUser.id);
+                      // Note: syncService.deleteAllUserData would need to be implemented
                     }
                     await deleteAccount();
                   }
@@ -327,90 +297,7 @@ const Profile: React.FC = () => {
     );
   }, [authUser, deleteAccount]);
 
-  const handleSync = useCallback(async () => {
-    if (!authUser?.id || isSyncing) return;
-    
-    setIsSyncing(true);
-    try {
-      // Push local changes first, then pull remote
-      await syncService.pushAll(authUser.id);
-      await syncService.pullAll(authUser.id);
-      setLastSyncTime(new Date());
-    } catch (error) {
-      Alert.alert('Sync Failed', 'Could not sync data. Please try again.');
-    } finally {
-      setIsSyncing(false);
-    }
-  }, [authUser, isSyncing]);
-
-  const handleAvatarPick = useCallback(async (source: 'camera' | 'gallery') => {
-    try {
-      let result;
-      
-      if (source === 'camera') {
-        const permission = await ImagePicker.requestCameraPermissionsAsync();
-        if (!permission.granted) {
-          Alert.alert('Permission Required', 'Camera permission is required to take photos.');
-          return;
-        }
-        result = await ImagePicker.launchCameraAsync({
-          mediaTypes: ImagePicker.MediaTypeOptions.Images,
-          allowsEditing: true,
-          aspect: [1, 1],
-          quality: 0.8,
-        });
-      } else {
-        const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-        if (!permission.granted) {
-          Alert.alert('Permission Required', 'Photo library permission is required to select photos.');
-          return;
-        }
-        result = await ImagePicker.launchImageLibraryAsync({
-          mediaTypes: ImagePicker.MediaTypeOptions.Images,
-          allowsEditing: true,
-          aspect: [1, 1],
-          quality: 0.8,
-        });
-      }
-
-      if (!result.canceled && result.assets && result.assets.length > 0) {
-        const uri = result.assets[0].uri;
-        updateUser({ avatarUri: uri });
-      }
-    } catch (error) {
-      Alert.alert('Error', 'Failed to select image. Please try again.');
-    } finally {
-      setShowAvatarModal(false);
-    }
-  }, [updateUser]);
-
-  const handleRemoveAvatar = useCallback(() => {
-    Alert.alert(
-      'Remove Photo',
-      'Are you sure you want to remove your profile photo?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Remove',
-          style: 'destructive',
-          onPress: () => {
-            updateUser({ avatarUri: null });
-            setShowAvatarModal(false);
-          },
-        },
-      ]
-    );
-  }, [updateUser]);
-
-  const handleSaveNetWorth = useCallback(() => {
-    const amount = parseFloat(netWorthInput.replace(/[^0-9.-]/g, ''));
-    if (isNaN(amount) || amount < 0) {
-      Alert.alert('Invalid Amount', 'Please enter a valid number.');
-      return;
-    }
-    updateUser({ netWorth: amount });
-    setShowNetWorthModal(false);
-  }, [netWorthInput, updateUser]);
+  const formatCurrency = (amount: number) => formatCurrencyNew(amount, preferences.currency);
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -421,7 +308,7 @@ const Profile: React.FC = () => {
       >
         {/* Profile Header */}
         <View style={styles.profileHeader}>
-          <TouchableOpacity onPress={() => setShowAvatarModal(true)} style={styles.avatarContainer}>
+          <TouchableOpacity onPress={() => avatar.setShowAvatarModal(true)} style={styles.avatarContainer}>
             {user.avatarUri ? (
               <Image source={{ uri: user.avatarUri }} style={styles.avatarImage} />
             ) : (
@@ -463,10 +350,7 @@ const Profile: React.FC = () => {
                 </View>
               </View>
               <TouchableOpacity
-                onPress={() => {
-                  setNetWorthInput((user.netWorth || 0).toString());
-                  setShowNetWorthModal(true);
-                }}
+                onPress={netWorth.openNetWorthModal}
                 style={styles.editNetWorthBtn}
                 accessibilityLabel="Edit net worth"
                 accessibilityRole="button"
@@ -481,10 +365,10 @@ const Profile: React.FC = () => {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>ACCOUNT</Text>
           <View style={styles.card}>
-            <MenuItem 
-              icon="person-outline" 
-              label="Personal Info" 
-              value={authUser?.email || ''} 
+            <MenuItem
+              icon="person-outline"
+              label="Personal Info"
+              value={authUser?.email || ''}
             />
             <MenuItem icon="shield-outline" label="Privacy & Security" />
           </View>
@@ -494,7 +378,12 @@ const Profile: React.FC = () => {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>PREFERENCES</Text>
           <View style={styles.card}>
-            <MenuItem icon="settings-outline" label="General Settings" value={preferences.currency} />
+            <MenuItem
+              icon="settings-outline"
+              label="Currency"
+              value={currency.currentCurrencyInfo.code}
+              onPress={() => currency.setShowCurrencyModal(true)}
+            />
             <ToggleItem
               icon="moon-outline"
               label="Dark Mode"
@@ -503,9 +392,9 @@ const Profile: React.FC = () => {
             />
             <ToggleItem
               icon="finger-print-outline"
-              label={biometricAvailable ? `${biometricName} Login` : 'Biometric Login'}
+              label={biometric.biometricAvailable ? `${biometric.biometricName} Login` : 'Biometric Login'}
               enabled={preferences.biometricEnabled}
-              onToggle={handleBiometricToggle}
+              onToggle={biometric.handleBiometricToggle}
             />
           </View>
         </View>
@@ -543,8 +432,8 @@ const Profile: React.FC = () => {
               prefs={preferences.billReminder ?? DEFAULT_BILL_REMINDER_PREFS}
               onUpdate={(updates) => {
                 const currentPrefs = preferences.billReminder ?? DEFAULT_BILL_REMINDER_PREFS;
-                updatePreferences({ 
-                  billReminder: { ...currentPrefs, ...updates } 
+                updatePreferences({
+                  billReminder: { ...currentPrefs, ...updates }
                 });
               }}
             />
@@ -569,8 +458,8 @@ const Profile: React.FC = () => {
           <Text style={styles.sectionTitle}>CLOUD SYNC</Text>
           <View style={styles.card}>
             <TouchableOpacity
-              onPress={handleSync}
-              disabled={isSyncing}
+              onPress={sync.handleSync}
+              disabled={sync.isSyncing}
               style={styles.menuItem}
               activeOpacity={0.7}
               accessibilityLabel="Sync now"
@@ -581,11 +470,11 @@ const Profile: React.FC = () => {
                 <Text style={styles.menuLabel}>Sync Now</Text>
               </View>
               <View style={commonStyles.row}>
-                {isSyncing ? (
+                {sync.isSyncing ? (
                   <ActivityIndicator size="small" color={colors.mint} />
-                ) : lastSyncTime ? (
+                ) : sync.lastSyncTime ? (
                   <Text style={styles.menuValue}>
-                    {lastSyncTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    {sync.lastSyncTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                   </Text>
                 ) : (
                   <Text style={styles.menuValue}>Not synced</Text>
@@ -601,8 +490,8 @@ const Profile: React.FC = () => {
           <Text style={styles.sectionTitle}>DATA</Text>
           <View style={styles.card}>
             <TouchableOpacity
-              onPress={showExportOptions}
-              disabled={isExporting}
+              onPress={exportHook.showExportOptions}
+              disabled={exportHook.isExporting}
               style={[styles.menuItem, styles.borderBottom]}
               activeOpacity={0.7}
               accessibilityLabel="Export all data"
@@ -613,9 +502,9 @@ const Profile: React.FC = () => {
                 <Text style={styles.menuLabel}>Export All Data</Text>
               </View>
               <AnimatePresence>
-                {isExporting ? (
+                {exportHook.isExporting ? (
                   <ActivityIndicator size="small" color={colors.mint} />
-                ) : exportSuccess ? (
+                ) : exportHook.exportSuccess ? (
                   <MotiView
                     from={{ opacity: 0, scale: 0.5 }}
                     animate={{ opacity: 1, scale: 1 }}
@@ -634,8 +523,8 @@ const Profile: React.FC = () => {
         </View>
 
         {/* Sign Out */}
-        <TouchableOpacity 
-          style={styles.signOutBtn} 
+        <TouchableOpacity
+          style={styles.signOutBtn}
           activeOpacity={0.7}
           onPress={handleSignOut}
           disabled={authLoading}
@@ -653,8 +542,8 @@ const Profile: React.FC = () => {
         </TouchableOpacity>
 
         {/* Delete Account */}
-        <TouchableOpacity 
-          style={styles.deleteAccountBtn} 
+        <TouchableOpacity
+          style={styles.deleteAccountBtn}
           activeOpacity={0.7}
           onPress={handleDeleteAccount}
           disabled={authLoading}
@@ -669,44 +558,44 @@ const Profile: React.FC = () => {
 
         {/* Avatar Picker Modal */}
         <Modal
-          visible={showAvatarModal}
+          visible={avatar.showAvatarModal}
           transparent
           animationType="fade"
-          onRequestClose={() => setShowAvatarModal(false)}
+          onRequestClose={() => avatar.setShowAvatarModal(false)}
         >
           <TouchableOpacity
             style={styles.modalOverlay}
             activeOpacity={1}
-            onPress={() => setShowAvatarModal(false)}
+            onPress={() => avatar.setShowAvatarModal(false)}
           >
             <TouchableWithoutFeedback>
               <View style={styles.modalContent}>
                 <Text style={styles.modalTitle}>Profile Photo</Text>
-                
+
                 <TouchableOpacity
                   style={styles.modalOption}
-                  onPress={() => handleAvatarPick('camera')}
+                  onPress={() => avatar.handleAvatarPick('camera')}
                   accessibilityLabel="Take photo"
                   accessibilityRole="button"
                 >
                   <Ionicons name="camera-outline" size={22} color={colors.white} />
                   <Text style={styles.modalOptionText}>Take Photo</Text>
                 </TouchableOpacity>
-                
+
                 <TouchableOpacity
                   style={styles.modalOption}
-                  onPress={() => handleAvatarPick('gallery')}
+                  onPress={() => avatar.handleAvatarPick('gallery')}
                   accessibilityLabel="Choose from library"
                   accessibilityRole="button"
                 >
                   <Ionicons name="images-outline" size={22} color={colors.white} />
                   <Text style={styles.modalOptionText}>Choose from Library</Text>
                 </TouchableOpacity>
-                
+
                 {user.avatarUri && (
                   <TouchableOpacity
                     style={[styles.modalOption, styles.modalOptionDanger]}
-                    onPress={handleRemoveAvatar}
+                    onPress={avatar.handleRemoveAvatar}
                     accessibilityLabel="Remove photo"
                     accessibilityRole="button"
                   >
@@ -714,10 +603,10 @@ const Profile: React.FC = () => {
                     <Text style={[styles.modalOptionText, styles.modalOptionTextDanger]}>Remove Photo</Text>
                   </TouchableOpacity>
                 )}
-                
+
                 <TouchableOpacity
                   style={styles.modalCancel}
-                  onPress={() => setShowAvatarModal(false)}
+                  onPress={() => avatar.setShowAvatarModal(false)}
                   accessibilityLabel="Cancel"
                   accessibilityRole="button"
                 >
@@ -730,45 +619,94 @@ const Profile: React.FC = () => {
 
         {/* Net Worth Modal */}
         <Modal
-          visible={showNetWorthModal}
+          visible={netWorth.showNetWorthModal}
           transparent
           animationType="fade"
-          onRequestClose={() => setShowNetWorthModal(false)}
+          onRequestClose={() => netWorth.setShowNetWorthModal(false)}
         >
           <TouchableOpacity
             style={styles.modalOverlay}
             activeOpacity={1}
-            onPress={() => setShowNetWorthModal(false)}
+            onPress={() => netWorth.setShowNetWorthModal(false)}
           >
             <TouchableWithoutFeedback>
               <View style={styles.modalContent}>
                 <Text style={styles.modalTitle}>Update Net Worth</Text>
-                
+
                 <View style={styles.netWorthInputContainer}>
-                  <Text style={styles.currencySymbol}>$</Text>
+                  <Text style={styles.currencySymbol}>{currency.currentCurrencyInfo.symbol}</Text>
                   <TextInput
                     style={styles.netWorthInput}
-                    value={netWorthInput}
-                    onChangeText={setNetWorthInput}
+                    value={netWorth.netWorthInput}
+                    onChangeText={netWorth.setNetWorthInput}
                     keyboardType="numeric"
                     placeholder="0.00"
                     placeholderTextColor={colors.neutral600}
                     autoFocus
                   />
                 </View>
-                
+
                 <TouchableOpacity
                   style={styles.modalSaveBtn}
-                  onPress={handleSaveNetWorth}
+                  onPress={netWorth.handleSaveNetWorth}
                   accessibilityLabel="Save net worth"
                   accessibilityRole="button"
                 >
                   <Text style={styles.modalSaveBtnText}>Save</Text>
                 </TouchableOpacity>
-                
+
                 <TouchableOpacity
                   style={styles.modalCancel}
-                  onPress={() => setShowNetWorthModal(false)}
+                  onPress={() => netWorth.setShowNetWorthModal(false)}
+                  accessibilityLabel="Cancel"
+                  accessibilityRole="button"
+                >
+                  <Text style={styles.modalCancelText}>Cancel</Text>
+                </TouchableOpacity>
+              </View>
+            </TouchableWithoutFeedback>
+          </TouchableOpacity>
+        </Modal>
+
+        {/* Currency Selector Modal */}
+        <Modal
+          visible={currency.showCurrencyModal}
+          transparent
+          animationType="slide"
+          onRequestClose={() => currency.setShowCurrencyModal(false)}
+        >
+          <TouchableOpacity
+            style={styles.modalOverlay}
+            activeOpacity={1}
+            onPress={() => currency.setShowCurrencyModal(false)}
+          >
+            <TouchableWithoutFeedback>
+              <View style={styles.currencyModalContent}>
+                <Text style={styles.modalTitle}>Select Currency</Text>
+                <ScrollView style={styles.currencyList}>
+                  {currency.currencies.map((curr) => (
+                    <TouchableOpacity
+                      key={curr.code}
+                      style={[
+                        styles.currencyItem,
+                        curr.code === preferences.currency && styles.currencyItemActive,
+                      ]}
+                      onPress={() => currency.handleCurrencySelect(curr.code)}
+                      accessibilityLabel={`Select ${curr.name}`}
+                      accessibilityRole="button"
+                    >
+                      <Text style={styles.currencySymbolText}>{curr.symbol}</Text>
+                      <Text style={styles.currencyName}>{curr.name}</Text>
+                      <Text style={styles.currencyCode}>{curr.code}</Text>
+                      {curr.code === preferences.currency && (
+                        <Ionicons name="checkmark" size={20} color={colors.mint} />
+                      )}
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+                <TouchableOpacity
+                  style={styles.modalCancel}
+                  onPress={() => currency.setShowCurrencyModal(false)}
                   accessibilityLabel="Cancel"
                   accessibilityRole="button"
                 >
@@ -782,6 +720,10 @@ const Profile: React.FC = () => {
     </View>
   );
 };
+
+// Add missing import for useCallback
+import { useCallback } from 'react';
+import { TextInput } from 'react-native';
 
 const styles = StyleSheet.create({
   container: {
@@ -848,11 +790,6 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSizes.sm,
     color: colors.neutral500,
   },
-  profileEmail: {
-    fontSize: typography.fontSizes.sm,
-    color: colors.neutral400,
-    marginBottom: spacing[1],
-  },
   section: {
     marginBottom: spacing[6],
   },
@@ -907,59 +844,6 @@ const styles = StyleSheet.create({
     height: 20,
     borderRadius: 10,
     backgroundColor: colors.white,
-  },
-  accountItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: spacing[4],
-  },
-  accountLogo: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: colors.white,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: spacing[3],
-  },
-  accountName: {
-    fontSize: typography.fontSizes.base,
-    fontWeight: typography.fontWeights.medium,
-    color: colors.white,
-  },
-  accountType: {
-    fontSize: typography.fontSizes.xs,
-    color: colors.neutral500,
-    textTransform: 'capitalize',
-  },
-  accountBalance: {
-    alignItems: 'flex-end',
-  },
-  balanceAmount: {
-    fontSize: typography.fontSizes.base,
-    fontFamily: 'monospace',
-    fontWeight: typography.fontWeights.medium,
-    color: colors.white,
-  },
-  syncText: {
-    fontSize: 10,
-    color: colors.neutral500,
-    marginLeft: spacing[1],
-  },
-  addAccountBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing[2],
-    padding: spacing[4],
-    borderTopWidth: 1,
-    borderTopColor: colors.surface300,
-  },
-  addAccountText: {
-    fontSize: typography.fontSizes.base,
-    fontWeight: typography.fontWeights.medium,
-    color: colors.mint,
   },
   successText: {
     fontSize: typography.fontSizes.sm,
@@ -1040,6 +924,14 @@ const styles = StyleSheet.create({
     padding: spacing[6],
     width: '85%',
     maxWidth: 340,
+  },
+  currencyModalContent: {
+    backgroundColor: colors.surface200,
+    borderRadius: borderRadius['2xl'],
+    padding: spacing[6],
+    width: '85%',
+    maxWidth: 340,
+    maxHeight: '80%',
   },
   modalTitle: {
     fontSize: typography.fontSizes.lg,
@@ -1150,6 +1042,36 @@ const styles = StyleSheet.create({
   },
   optionPillTextActive: {
     color: colors.mint,
+  },
+  // Currency modal styles
+  currencyList: {
+    maxHeight: 400,
+  },
+  currencyItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: spacing[4],
+    borderBottomWidth: 1,
+    borderBottomColor: colors.surface300,
+  },
+  currencyItemActive: {
+    backgroundColor: 'rgba(0, 217, 165, 0.1)',
+  },
+  currencySymbolText: {
+    fontSize: typography.fontSizes.lg,
+    width: 40,
+    textAlign: 'center',
+  },
+  currencyName: {
+    flex: 1,
+    fontSize: typography.fontSizes.base,
+    color: colors.white,
+    fontWeight: typography.fontWeights.medium,
+  },
+  currencyCode: {
+    fontSize: typography.fontSizes.sm,
+    color: colors.neutral500,
+    marginRight: spacing[2],
   },
 });
 

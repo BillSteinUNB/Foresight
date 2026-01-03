@@ -13,6 +13,7 @@ interface TransactionActions {
   deleteTransaction: (id: string) => void;
   deleteTransactions: (ids: string[]) => void;
   updateTransaction: (id: string, updates: TransactionUpdate) => void;
+  updateTransactionsCategory: (ids: string[], category: Transaction['category']) => void;
   setTransactions: (transactions: Transaction[]) => void;
   loadDemoData: () => void;
   reset: () => void;
@@ -60,6 +61,15 @@ export const useTransactionStore = create<TransactionStore>()(
         set((state) => ({
           transactions: state.transactions.map((t) =>
             t.id === id ? { ...t, ...updates, id: t.id } : t
+          ),
+        }));
+      },
+
+      updateTransactionsCategory: (ids, category) => {
+        const idsSet = new Set(ids);
+        set((state) => ({
+          transactions: state.transactions.map((t) =>
+            idsSet.has(t.id) ? { ...t, category } : t
           ),
         }));
       },
